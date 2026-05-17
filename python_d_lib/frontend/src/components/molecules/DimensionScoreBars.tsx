@@ -98,7 +98,7 @@ export function DimensionScoreBars({
               />
             </div>
             {displayDetail ? (
-              <div className="mt-2 rounded-xl border border-black/[0.05] bg-white/80 px-2.5 py-2 text-[0.72rem] leading-relaxed text-ink-muted [text-wrap:pretty]">
+              <div className="mt-2 rounded-xl border border-white/35 bg-white/35 px-2.5 py-2 text-[0.72rem] leading-relaxed text-ink-muted backdrop-blur-sm [text-wrap:pretty]">
                 <span className="whitespace-pre-wrap">
                   <MathPrettyText text={displayDetail} />
                 </span>

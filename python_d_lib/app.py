@@ -50,6 +50,11 @@ except ImportError:
     def english_process(p, *, grade_level="", teacher_note=""):
         return {"error": True, "score": "—", "comments": "英语批改模块加载失败", "weak_points": [], "scores": {}, "errors": []}
 
+try:
+    from grading_insights import generate_batch_insights
+except ImportError:
+    generate_batch_insights = None
+
 
 def math_process(image_path: str, *, grade_level: str = "", teacher_note: str = "") -> dict:
     """网页端数学批改入口：复用 math_correct 现有 AI 与规范化逻辑，不改动批改核心代码。"""
@@ -252,6 +257,49 @@ def api_grade():
 
     image_url = url_for("uploaded_file", filename=filename)
     return jsonify({"ok": True, "subject": subject, "result": result_data, "image_url": image_url})
+
+
+@app.route("/api/grading/batch-insights", methods=["POST"])
+def api_grading_batch_insights():
+    """批量学情分析：错题模式、薄弱知识点、变式题建议。"""
+    if generate_batch_insights is None:
+        return jsonify({"ok": False, "message": "学情分析模块未加载"}), 503
+
+    if not request.is_json:
+        return jsonify({"ok": False, "message": "请求需为 JSON"}), 400
+
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        return jsonify({"ok": False, "message": "无效请求体"}), 400
+
+    subject = (payload.get("subject") or "math").strip().lower()
+    if subject not in ("math", "english"):
+        return jsonify({"ok": False, "message": "仅支持 math 或 english"}), 400
+
+    items = payload.get("items")
+    if not isinstance(items, list) or len(items) == 0:
+        return jsonify({"ok": False, "message": "请提供至少一份已批改作业摘要"}), 400
+    if len(items) > 80:
+        return jsonify({"ok": False, "message": "单次最多分析 80 份作业"}), 400
+
+    grade_level = _sanitize_grade_level(payload.get("grade_level") or "")
+    teacher_note = _sanitize_teacher_note(payload.get("teacher_note") or "")
+    group_name = _feedback_clip(payload.get("group_name"), 120)
+    use_llm = payload.get("use_llm", True) is not False
+
+    try:
+        out = generate_batch_insights(
+            subject,
+            items,
+            grade_level=grade_level,
+            teacher_note=teacher_note,
+            group_name=group_name,
+            use_llm=use_llm,
+        )
+        return jsonify(out)
+    except Exception as e:
+        print(f"batch-insights error: {e}")
+        return jsonify({"ok": False, "message": f"学情分析失败: {e}"}), 500
 
 
 def _feedback_clip(s: object, max_len: int) -> str:

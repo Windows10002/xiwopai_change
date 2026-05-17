@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { BookOpen, Calculator, Eraser } from "lucide-react";
+import { BarChart3, BookOpen, Calculator, Eraser } from "lucide-react";
 import { HistoryDropdown } from "@/components/atoms/Navbar";
 import { PrimaryButton } from "@/components/atoms/PrimaryButton";
 import { Breadcrumb, type BreadcrumbItem } from "@/components/atoms/Breadcrumb";
@@ -11,6 +11,7 @@ import { StepIndicator, getGradingStepLabel } from "@/components/molecules/StepI
 import { UploadDropzone } from "@/components/organisms/UploadDropzone";
 import { ScoreResultCard } from "@/components/organisms/ScoreResultCard";
 import { AiHelpModal } from "@/components/organisms/AiHelpModal";
+import { BatchInsightsModal } from "@/components/organisms/BatchInsightsModal";
 import { GradingContextModal } from "@/components/molecules/GradingContextModal";
 import { TeacherGradingDisputeToolbarButton } from "@/components/molecules/GradingDisputePanels";
 import { useAppSession } from "@/hooks/useAppSession";
@@ -28,6 +29,7 @@ import {
 import { clearGradingLiveDraft, loadGradingLiveDraft, saveGradingLiveDraft } from "@/lib/gradingSession";
 import { deleteHistoryImageBlob, getHistoryImageBlob, putHistoryImageBlob } from "@/lib/gradingHistoryImageDb";
 import { fileToJpegBlobForStorage, fileToJpegThumbDataUrl } from "@/lib/imageThumb";
+import { GlassOpacityControl } from "@/components/molecules/GlassOpacityControl";
 import { saveUserPreferences } from "@/lib/userPreferences";
 import { useUserPreferences } from "@/hooks/useUserPreferences";
 import { CUTE_ICON } from "@/components/atoms/cuteIcon";
@@ -94,6 +96,7 @@ export function GradingWorkspace({
   const session = useAppSession();
   const isTeacher = session?.role === "teacher";
   const [helpOpen, setHelpOpen] = useState(false);
+  const [batchInsightsOpen, setBatchInsightsOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [historyItems, setHistoryItems] = useState<GradingHistoryEntry[]>(() => loadGradingHistory());
   const [contextModalOpen, setContextModalOpen] = useState(false);
@@ -608,6 +611,28 @@ export function GradingWorkspace({
     return stem || "作业批改";
   }, [selectedFiles, currentFileIndex]);
 
+  const batchInsightEntries = useMemo(() => {
+    const out: Array<{ fileName: string; detail: GradingResultDetail }> = [];
+    if (selectedFiles.length > 0 && batchResults.length > 0) {
+      selectedFiles.forEach((file, index) => {
+        const detail = batchResults[index];
+        if (detail) out.push({ fileName: file.name, detail });
+      });
+      return out;
+    }
+    if (result && selectedFiles.length === 1) {
+      out.push({ fileName: selectedFiles[0]!.name, detail: result });
+    } else if (result && selectedFiles.length === 0) {
+      out.push({ fileName: exportBaseName, detail: result });
+    }
+    return out;
+  }, [selectedFiles, batchResults, result, exportBaseName]);
+
+  const batchInsightGroupName = useMemo(
+    () => deriveBatchFolderLabel(selectedFiles) ?? (selectedFiles.length > 1 ? `本批 ${selectedFiles.length} 张` : undefined),
+    [selectedFiles],
+  );
+
   /** 写入反馈 JSONL：当前卷服务端路径、本地历史 id、批次与文件名 */
   const gradingFeedbackTrace = useMemo((): GradingFeedbackTrace => {
     if (selectedFiles.length > 0) {
@@ -690,7 +715,7 @@ export function GradingWorkspace({
     <div className="page-bg-hero-stunning relative flex min-h-screen flex-col">
       <div className="relative z-10 flex min-h-0 flex-1 flex-col">
         <main className={`mx-auto w-full flex-1 px-4 py-6 md:px-6 md:py-8 ${CONTENT_MAX}`}>
-          <div className="mb-6 rounded-2xl border border-black/[0.06] bg-gradient-to-r from-white/98 via-primary-tint/35 to-white/95 px-3 py-3 shadow-card ring-1 ring-primary/10 md:flex md:items-center md:justify-between md:gap-4 md:px-4 md:py-2.5">
+          <div className="glass-panel mb-6 rounded-2xl bg-gradient-to-r from-white/55 via-primary-tint/25 to-white/50 px-3 py-3 md:flex md:items-center md:justify-between md:gap-4 md:px-4 md:py-2.5">
             <div className="flex min-w-0 flex-1 flex-col gap-2.5 sm:flex-row sm:items-center sm:gap-3 md:gap-4">
               <div className="flex shrink-0 items-center gap-2 md:gap-2.5">
                 <div className="flex shrink-0 items-center justify-center rounded-xl border border-primary/20 bg-white/90 p-0.5 shadow-sm ring-1 ring-primary/10 sm:rounded-2xl sm:p-1">
@@ -727,7 +752,12 @@ export function GradingWorkspace({
                 <Breadcrumb items={breadcrumbItems} variant="embedded" contentMaxClassName="max-w-none" />
               </div>
             </div>
-            <div className="mt-3 flex shrink-0 items-center justify-end gap-2 border-t border-black/[0.06] pt-3 md:mt-0 md:border-t-0 md:pt-0">
+            <div className="mt-3 flex shrink-0 flex-wrap items-center justify-end gap-2 border-t border-black/[0.06] pt-3 md:mt-0 md:border-t-0 md:pt-0">
+              <GlassOpacityControl
+                compact
+                value={prefs.glassOpacity}
+                onChange={(v) => saveUserPreferences({ glassOpacity: v })}
+              />
               {isTeacher ? <TeacherGradingDisputeToolbarButton /> : null}
               <HistoryDropdown variant="toolbar" subjectScope={subject} />
             </div>
@@ -741,7 +771,7 @@ export function GradingWorkspace({
                   type="button"
                   disabled={isGrading}
                   onClick={clearCurrentWorkspace}
-                  className="inline-flex min-h-10 w-full flex-col items-center justify-center gap-1 rounded-xl border border-black/[0.08] bg-white px-2.5 py-2 text-center text-caption font-extrabold leading-tight text-ink-muted shadow-sm transition hover:border-amber-300 hover:bg-amber-50/90 hover:text-amber-950 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto sm:min-w-0 sm:max-w-[5.25rem] sm:px-2"
+                  className="inline-flex min-h-10 w-full flex-col items-center justify-center gap-1 rounded-xl border border-white/50 bg-white/55 px-2.5 py-2 text-center text-caption font-extrabold leading-tight text-ink-muted shadow-sm backdrop-blur-sm transition hover:border-amber-300 hover:bg-amber-50/75 hover:text-amber-950 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto sm:min-w-0 sm:max-w-[5.25rem] sm:px-2"
                 >
                   <Eraser className="h-4 w-4 shrink-0" {...CUTE_ICON} aria-hidden />
                   <span>清空当前页</span>
@@ -749,7 +779,7 @@ export function GradingWorkspace({
               }
             />
             <div className="mt-6 grid grid-cols-1 gap-6 md:mt-8 md:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] md:gap-8 md:items-stretch">
-              <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-4 rounded-[1.35rem] border border-black/[0.06] bg-white/75 p-4 shadow-inner ring-1 ring-primary/10 md:h-full md:min-h-0 md:p-5">
+              <div className="glass-panel flex min-h-0 min-w-0 flex-1 flex-col gap-4 rounded-[1.35rem] p-4 md:h-full md:min-h-0 md:p-5">
                 <UploadDropzone
                   title={uploadTitle}
                   hint={combinedHint}
@@ -789,11 +819,25 @@ export function GradingWorkspace({
                 </div>
                 {selectedFiles.length > 1 ? (
                   !isGrading && (batchSuccessCount > 0 || batchFailCount > 0) ? (
-                    <div className="rounded-card border border-primary/15 bg-gradient-to-br from-white to-primary-tint/40 p-4 shadow-sm ring-1 ring-primary/10">
-                      <p className="text-small font-extrabold text-ink">文件夹批改一览</p>
-                      <p className="mt-1 text-caption text-ink-muted">
-                        共 {selectedFiles.length} 张 · 成功 {batchSuccessCount} · 失败 {batchFailCount}。点击下方行切换左侧原图与右侧得分。
-                      </p>
+                    <div className="glass-tint rounded-card p-4">
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div>
+                          <p className="text-small font-extrabold text-ink">文件夹批改一览</p>
+                          <p className="mt-1 text-caption text-ink-muted">
+                            共 {selectedFiles.length} 张 · 成功 {batchSuccessCount} · 失败 {batchFailCount}。点击下方行切换左侧原图与右侧得分。
+                          </p>
+                        </div>
+                        {batchSuccessCount > 0 ? (
+                          <button
+                            type="button"
+                            onClick={() => setBatchInsightsOpen(true)}
+                            className="inline-flex shrink-0 items-center gap-2 rounded-xl border border-white/45 bg-white/50 px-3 py-2 text-caption font-bold text-[#006D41] shadow-sm backdrop-blur-sm transition hover:bg-white/65"
+                          >
+                            <BarChart3 className="h-4 w-4" {...CUTE_ICON} aria-hidden />
+                            学情分析
+                          </button>
+                        ) : null}
+                      </div>
                       <ul className="mt-3 max-h-[min(40vh,16rem)] space-y-1.5 overflow-y-auto overscroll-contain">
                         {selectedFiles.map((file, index) => {
                           const r = batchResults[index];
@@ -859,6 +903,18 @@ export function GradingWorkspace({
                 ) : null}
               </div>
               <div className="flex min-h-0 min-w-0 flex-col md:h-full md:min-h-[min(100%,28rem)]">
+                {batchInsightEntries.length > 0 && !isGrading && selectedFiles.length <= 1 ? (
+                  <div className="mb-3 flex justify-end">
+                    <button
+                      type="button"
+                      onClick={() => setBatchInsightsOpen(true)}
+                      className="inline-flex items-center gap-2 rounded-xl border border-white/45 bg-white/50 px-3 py-2 text-caption font-bold text-[#006D41] shadow-sm backdrop-blur-sm transition hover:bg-white/65"
+                    >
+                      <BarChart3 className="h-4 w-4" {...CUTE_ICON} aria-hidden />
+                      学情分析与变式题
+                    </button>
+                  </div>
+                ) : null}
                 <ScoreResultCard
                   subject={subject}
                   result={result}
@@ -875,6 +931,16 @@ export function GradingWorkspace({
         {prefs.showGradingFabHelp ? <FabHelp onClick={() => setHelpOpen(true)} /> : null}
       </div>
 
+      <BatchInsightsModal
+        open={batchInsightsOpen}
+        onClose={() => setBatchInsightsOpen(false)}
+        subject={subject}
+        subjectLabel={subjectLabel}
+        entries={batchInsightEntries}
+        gradeLevel={teacherGradeLevel}
+        teacherNote={teacherNote}
+        groupName={batchInsightGroupName}
+      />
       <AiHelpModal open={helpOpen} onClose={() => setHelpOpen(false)} />
       <GradingContextModal
         open={contextModalOpen}

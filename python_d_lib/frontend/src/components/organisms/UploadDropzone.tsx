@@ -254,18 +254,18 @@ export function UploadDropzone({
       return "border-[3px] border-dashed border-red-500/80 bg-red-50/90";
     }
     if (status.phase === "info") {
-      return "border-[3px] border-dashed border-primary/60 bg-primary-tint/80";
+      return "border-[3px] border-dashed border-primary/60 bg-primary-tint/40 backdrop-blur-sm";
     }
     if (status.phase === "success") {
-      return "border-[3px] border-dashed border-primary bg-primary-tint/90";
+      return "border-[3px] border-dashed border-primary/70 bg-primary-tint/45 backdrop-blur-sm";
     }
     if (status.phase === "uploading") {
-      return "border-[3px] border-dashed border-primary/70 bg-white";
+      return "border-[3px] border-dashed border-primary/70 bg-white/40 backdrop-blur-sm";
     }
     if (dragging) {
       return "border-[4px] border-dashed border-[#389e0d] bg-primary-tint shadow-[0_0_0_5px_rgba(82,196,26,0.22)]";
     }
-    return "border-2 border-dashed border-black/[0.12] bg-white hover:border-brand/40 hover:bg-brand-muted/60";
+    return "border-2 border-dashed border-black/[0.12] bg-white/45 backdrop-blur-sm hover:border-brand/40 hover:bg-white/55";
   })();
 
   const outerTabIndex = locked || (sourcePickerOpen && !busy) ? -1 : undefined;
@@ -306,7 +306,7 @@ export function UploadDropzone({
     >
       {sourcePickerOpen && !busy ? (
         <div
-          className="absolute inset-0 z-20 flex select-none items-center justify-center overflow-y-auto rounded-card bg-white/94 px-3 py-5 backdrop-blur-[2px] sm:px-4 sm:py-6"
+          className="absolute inset-0 z-20 flex select-none items-center justify-center overflow-y-auto rounded-card bg-white/50 px-3 py-5 backdrop-blur-md sm:px-4 sm:py-6"
           role="dialog"
           aria-modal="true"
           aria-label="选择添加方式"
@@ -319,7 +319,7 @@ export function UploadDropzone({
           />
           <div
             ref={pickerPanelRef}
-            className="relative z-[30] w-full min-w-[17.5rem] max-w-sm select-none rounded-2xl border border-black/[0.08] bg-white p-5 shadow-card ring-1 ring-primary/10"
+            className="glass-panel relative z-[30] w-full min-w-[17.5rem] max-w-sm select-none rounded-2xl p-5"
           >
             <p className="text-center text-small font-extrabold text-ink">如何添加作业照片？</p>
             <p className="mt-1 text-center text-caption leading-relaxed text-ink-muted">可选多张图片，或一次选择整个文件夹（仅图片）。</p>
@@ -341,7 +341,7 @@ export function UploadDropzone({
                   e.stopPropagation();
                   openFolderPicker();
                 }}
-                className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-brand/30 bg-primary-tint px-4 py-3 text-caption font-bold text-[#006D41] shadow-sm transition hover:-translate-y-0.5 hover:border-brand/45"
+                className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-white/45 bg-white/40 px-4 py-3 text-caption font-bold text-[#51c527] shadow-sm backdrop-blur-sm transition hover:-translate-y-0.5 hover:border-primary/30 hover:bg-white/55"
               >
                 <FolderOpen className="h-4 w-4" {...CUTE_ICON} aria-hidden />
                 选择文件夹
@@ -353,7 +353,7 @@ export function UploadDropzone({
                     e.stopPropagation();
                     setSourcePickerOpen(false);
                   }}
-                  className="inline-flex min-h-9 cursor-pointer select-none items-center rounded-full border border-black/[0.1] bg-white px-5 py-2 text-caption font-semibold text-ink-muted caret-transparent outline-none shadow-sm transition hover:border-primary/30 hover:text-[#006D41] focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-2"
+                  className="inline-flex min-h-9 cursor-pointer select-none items-center rounded-full border border-white/45 bg-white/40 px-5 py-2 text-caption font-semibold text-ink-muted caret-transparent outline-none shadow-sm backdrop-blur-sm transition hover:border-primary/30 hover:bg-white/55 hover:text-[#006D41] focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-2"
                 >
                   取消
                 </button>
@@ -439,7 +439,7 @@ export function UploadDropzone({
             <span
               className={[
                 "flex h-20 w-20 items-center justify-center rounded-[1.65rem] border text-brand shadow-sm transition-all duration-button ease-smooth md:h-24 md:w-24",
-                dragging ? "border-brand bg-brand-muted shadow-card ring-4 ring-primary/20" : "border-brand/25 bg-brand-muted ring-2 ring-primary/10",
+                dragging ? "border-brand bg-white/45 shadow-card ring-4 ring-primary/20 backdrop-blur-sm" : "border-brand/25 bg-white/35 ring-2 ring-primary/10 backdrop-blur-sm",
               ].join(" ")}
             >
               <ImagePlus className="h-10 w-10 md:h-12 md:w-12" {...CUTE_ICON} aria-hidden />
@@ -451,7 +451,7 @@ export function UploadDropzone({
                 className={[
                   "mt-2 block rounded-tile px-3 py-2 text-caption transition-colors duration-button ease-smooth",
                   dragging
-                    ? "border border-brand/35 bg-primary-tint font-semibold text-[#006D41]"
+                    ? "border border-brand/35 bg-primary-tint/40 font-semibold text-[#51c527] backdrop-blur-sm"
                     : "border border-transparent text-ink-subtle",
                 ].join(" ")}
               >
@@ -485,7 +485,7 @@ export function UploadDropzone({
                 e.stopPropagation();
                 openFolderPicker();
               }}
-              className="inline-flex items-center gap-2 rounded-full border border-brand/25 bg-primary-tint px-4 py-2 text-caption font-bold text-[#006D41] shadow-sm transition hover:-translate-y-0.5 hover:border-brand/45"
+              className="inline-flex items-center gap-2 rounded-full border border-brand/25 bg-[#f4fcf0]/35 px-4 py-2 text-caption font-bold text-[#006D41] shadow-sm backdrop-blur-sm transition hover:-translate-y-0.5 hover:border-brand/45 hover:bg-[#f4fcf0]/50"
             >
               <FolderOpen className="h-4 w-4 pointer-events-none" {...CUTE_ICON} aria-hidden />
               选择文件夹
@@ -494,7 +494,7 @@ export function UploadDropzone({
           <div
             role="button"
             tabIndex={0}
-            className={`mt-1 flex max-w-full items-center gap-3 rounded-tile border border-black/[0.06] bg-surface-page px-3 py-2.5 text-left ${modalZoneClass}`}
+            className={`glass-panel-inner mt-1 flex max-w-full items-center gap-3 rounded-tile px-3 py-2.5 text-left ${modalZoneClass}`}
             onClick={openModalFromZone}
             onKeyDown={(e) => {
               if (e.key !== "Enter" && e.key !== " ") return;

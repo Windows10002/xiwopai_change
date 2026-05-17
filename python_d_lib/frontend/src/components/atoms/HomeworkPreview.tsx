@@ -332,7 +332,7 @@ export function HomeworkPreview({
 
   if (!imageUrl) {
     return (
-      <div className="rounded-card border-2 border-black/[0.08] bg-white px-4 py-10 text-center shadow-card">
+      <div className="glass-panel rounded-card px-4 py-10 text-center">
         <IpMascotCameraEmpty />
         <p className="mt-4 text-small font-semibold text-ink">上传图片后这里会显示预览</p>
         <p className="mt-1 text-caption text-ink-subtle">{idleHint ?? "支持拖拽或更换作业照片"}</p>
@@ -352,12 +352,12 @@ export function HomeworkPreview({
   return (
     <>
       <div
-        className={`flex min-h-0 flex-col overflow-hidden rounded-card border-2 border-black/[0.08] bg-white shadow-card ${fillColumn ? "min-h-[18rem] flex-1 md:min-h-0" : ""}`}
+        className={`glass-panel flex min-h-0 flex-col overflow-hidden rounded-card ${fillColumn ? "min-h-[18rem] flex-1 md:min-h-0" : ""}`}
       >
-        <div className="relative flex min-h-0 flex-1 flex-col bg-gradient-to-b from-primary-tint/35 to-surface-page">
+        <div className="relative flex min-h-0 flex-1 flex-col bg-gradient-to-b from-[#f4fcf0]/25 via-white/15 to-white/10 backdrop-blur-sm">
           <div className="relative flex min-h-0 flex-1 w-full items-center justify-center px-1 py-1 sm:px-2 sm:py-2">
             {imgFailed ? (
-              <div className="flex min-h-[200px] flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-black/[0.12] bg-white px-4 text-center">
+              <div className="flex min-h-[200px] flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-white/40 bg-white/30 px-4 text-center backdrop-blur-sm">
                 <p className="text-small font-semibold text-ink">图片未能加载</p>
                 <p className="text-caption text-ink-muted">请确认已启动后端，且本页与接口同源（开发环境需走 Vite 代理）。可重新上传作业照。</p>
               </div>
@@ -381,11 +381,11 @@ export function HomeworkPreview({
             ) : null}
           </div>
           {!imgFailed ? (
-            <div className="flex flex-wrap items-center justify-center gap-3 border-t border-black/[0.06] bg-white/95 px-3 py-3 sm:gap-4 sm:px-4">
+            <div className="flex flex-wrap items-center justify-center gap-3 border-t border-white/35 bg-white/25 px-3 py-3 backdrop-blur-md sm:gap-4 sm:px-4">
               <button
                 type="button"
                 onClick={() => setZoomOpen(true)}
-                className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-black/[0.1] bg-white px-5 py-2.5 text-small font-extrabold text-ink shadow-sm transition hover:border-primary/35 hover:text-[#006D41]"
+                className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-white/45 bg-white/40 px-5 py-2.5 text-small font-extrabold text-ink shadow-sm backdrop-blur-sm transition hover:border-primary/35 hover:bg-white/55 hover:text-[#006D41]"
               >
                 <ImageIcon className="h-5 w-5 shrink-0" {...CUTE_ICON} aria-hidden />
                 查看原图
@@ -397,7 +397,7 @@ export function HomeworkPreview({
                   "inline-flex min-h-11 items-center gap-2 rounded-xl border px-5 py-2.5 text-small font-extrabold shadow-sm transition",
                   pinned
                     ? "border-brand bg-brand text-white hover:bg-brand-hover"
-                    : "border-black/[0.1] bg-white text-ink hover:border-primary/35 hover:text-[#006D41]",
+                    : "border-white/45 bg-white/40 text-ink backdrop-blur-sm hover:border-primary/35 hover:bg-white/55 hover:text-[#006D41]",
                 ].join(" ")}
                 aria-pressed={pinned}
               >
@@ -412,21 +412,21 @@ export function HomeworkPreview({
           ) : null}
         </div>
         {footerParts.length > 0 ? (
-          <p className="border-t border-black/[0.06] px-3 py-2 text-center text-caption leading-snug text-ink-muted">{footerParts.join(" ")}</p>
+          <p className="border-t border-white/30 bg-white/15 px-3 py-2 text-center text-caption leading-snug text-ink-muted backdrop-blur-sm">{footerParts.join(" ")}</p>
         ) : null}
       </div>
 
       {typeof document !== "undefined" && pinned && imageUrl && !imgFailed && pinBox
         ? createPortal(
             <div
-              className="pointer-events-auto fixed z-[220] flex flex-col overflow-hidden rounded-2xl border border-primary/25 bg-white/98 shadow-[0_20px_50px_rgba(15,90,75,0.18)] ring-2 ring-brand/15 backdrop-blur-sm"
+              className="glass-panel pointer-events-auto fixed z-[220] flex flex-col overflow-hidden rounded-2xl shadow-[0_20px_50px_rgba(15,90,75,0.18)] ring-2 ring-brand/15"
               style={{ left: pinBox.x, top: pinBox.y, width: pinBox.w, height: pinBox.h }}
               role="dialog"
               aria-modal="false"
               aria-label="置顶原图"
             >
               <div
-                className="flex h-9 shrink-0 cursor-move items-center gap-2 border-b border-black/[0.06] bg-white/95 pl-2 pr-1"
+                className="flex h-9 shrink-0 cursor-move items-center gap-2 border-b border-white/35 bg-white/30 pl-2 pr-1 backdrop-blur-md"
                 onMouseDown={onPinHeaderDown}
               >
                 <span className="min-w-0 flex-1 truncate text-[0.68rem] font-bold text-ink-muted">
@@ -435,7 +435,7 @@ export function HomeworkPreview({
                 <div className="flex shrink-0 items-center gap-0.5" onMouseDown={(e) => e.stopPropagation()}>
                   <button
                     type="button"
-                    className="rounded-lg border border-black/[0.08] bg-white p-1.5 text-ink-muted hover:bg-primary-tint/70"
+                    className="rounded-lg border border-white/40 bg-white/40 p-1.5 text-ink-muted backdrop-blur-sm hover:bg-white/55"
                     aria-label="缩小"
                     onClick={() => setPinScale((s) => clamp(Math.round((s - 0.2) * 100) / 100, 0.35, 4))}
                   >
@@ -444,7 +444,7 @@ export function HomeworkPreview({
                   <span className="w-10 text-center text-[0.65rem] font-black tabular-nums text-ink">{Math.round(pinScale * 100)}%</span>
                   <button
                     type="button"
-                    className="rounded-lg border border-black/[0.08] bg-white p-1.5 text-ink-muted hover:bg-primary-tint/70"
+                    className="rounded-lg border border-white/40 bg-white/40 p-1.5 text-ink-muted backdrop-blur-sm hover:bg-white/55"
                     aria-label="放大"
                     onClick={() => setPinScale((s) => clamp(Math.round((s + 0.2) * 100) / 100, 0.35, 4))}
                   >
@@ -461,7 +461,7 @@ export function HomeworkPreview({
                 </div>
               </div>
               <div
-                className="relative flex min-h-0 flex-1 cursor-grab flex-col overflow-hidden overscroll-contain bg-surface-page/40 active:cursor-grabbing"
+                className="relative flex min-h-0 flex-1 cursor-grab flex-col overflow-hidden overscroll-contain bg-[#f4fcf0]/20 active:cursor-grabbing"
                 style={{ padding: PIN_PAD }}
                 onWheel={onPinWheel}
                 onMouseDown={onPinViewportMouseDown}
@@ -487,7 +487,7 @@ export function HomeworkPreview({
                 type="button"
                 aria-label="调整窗口大小"
                 onMouseDown={onResizeDown}
-                className="absolute bottom-1 right-1 z-[2] h-5 w-5 cursor-nwse-resize rounded border border-primary/25 bg-white/90 shadow-sm hover:bg-primary-tint/80"
+                className="absolute bottom-1 right-1 z-[2] h-5 w-5 cursor-nwse-resize rounded border border-primary/25 bg-white/50 shadow-sm backdrop-blur-sm hover:bg-white/70"
               />
             </div>,
             document.body,
@@ -504,21 +504,21 @@ export function HomeworkPreview({
             >
               <button
                 type="button"
-                className="absolute right-3 top-3 z-[230] rounded-full border border-black/[0.08] bg-white/95 p-2 text-ink shadow-card ring-1 ring-primary/15 transition hover:bg-primary-tint/80 sm:right-5 sm:top-5"
+                className="absolute right-3 top-3 z-[230] rounded-full border border-white/45 bg-white/50 p-2 text-ink shadow-card ring-1 ring-primary/15 backdrop-blur-md transition hover:bg-white/65 sm:right-5 sm:top-5"
                 aria-label="关闭"
                 onClick={() => setZoomOpen(false)}
               >
                 <X className="h-5 w-5 sm:h-6 sm:w-6" aria-hidden />
               </button>
-              <p className="pointer-events-none absolute left-1/2 top-3 z-[230] -translate-x-1/2 rounded-full bg-white/90 px-3 py-1 text-[0.65rem] font-bold text-ink-muted shadow-sm ring-1 ring-black/[0.06]">
+              <p className="pointer-events-none absolute left-1/2 top-3 z-[230] -translate-x-1/2 rounded-full border border-white/40 bg-white/45 px-3 py-1 text-[0.65rem] font-bold text-ink-muted shadow-sm ring-1 ring-white/30 backdrop-blur-md">
                 仅原图 · 滚轮缩放 {Math.round(zoomScale * 100)}%
               </p>
               <div
-                className="relative max-h-[min(92vh,100%)] max-w-[min(96vw,56rem)] overflow-hidden rounded-[1.35rem] border border-black/[0.08] bg-white/96 p-2 shadow-[0_20px_60px_rgba(15,90,75,0.12)] ring-1 ring-primary/12 sm:p-3"
+                className="glass-panel relative max-h-[min(92vh,100%)] max-w-[min(96vw,56rem)] overflow-hidden rounded-[1.35rem] p-2 shadow-[0_20px_60px_rgba(15,90,75,0.12)] sm:p-3"
                 onClick={(e) => e.stopPropagation()}
               >
                 <div
-                  className="relative mx-auto max-h-[min(88vh,calc(100vh-4rem))] max-w-full overflow-auto overscroll-contain rounded-xl bg-surface-page/80"
+                  className="relative mx-auto max-h-[min(88vh,calc(100vh-4rem))] max-w-full overflow-auto overscroll-contain rounded-xl bg-white/25 backdrop-blur-sm"
                   onWheel={onZoomWheel}
                 >
                   <img

@@ -17,6 +17,7 @@ import {
 } from "@/lib/userPreferences";
 import type { ExportDimensionFilter } from "@/lib/exportGrading";
 import { StudentGradingDisputePanel, TeacherGradingDisputePanel } from "@/components/molecules/GradingDisputePanels";
+import { GlassOpacityControl } from "@/components/molecules/GlassOpacityControl";
 
 function gradeLabel(g: number | null, role: string): string {
   if (role === "teacher") return "—（教师）";
@@ -153,6 +154,10 @@ export function SettingsPage() {
               hint="关闭后数学/英语批改页不再显示浮动帮助。"
               checked={prefs.showGradingFabHelp}
               onChange={(v) => applyPrefs({ showGradingFabHelp: v })}
+            />
+            <GlassOpacityControl
+              value={prefs.glassOpacity}
+              onChange={(v) => applyPrefs({ glassOpacity: v })}
             />
             <div className="rounded-xl border border-black/[0.06] bg-surface-page/80 px-4 py-3">
               <label htmlFor="pref-insight-tab" className="block text-small font-bold text-ink">

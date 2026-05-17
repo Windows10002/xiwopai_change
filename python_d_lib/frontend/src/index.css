@@ -118,6 +118,40 @@ body {
 }
 
 @layer components {
+  /** 批改页主卡片：半透明白 + 毛玻璃（浓淡由 --glass-* 变量控制，见设置页滑条） */
+  .glass-panel {
+    @apply shadow-card ring-1;
+    border: 1px solid rgb(255 255 255 / var(--glass-border-alpha, 0.55));
+    background-color: rgb(255 255 255 / var(--glass-panel-alpha, 0.6));
+    --tw-ring-color: rgb(255 255 255 / var(--glass-ring-alpha, 0.4));
+    -webkit-backdrop-filter: blur(var(--glass-blur, 16px));
+    backdrop-filter: blur(var(--glass-blur, 16px));
+  }
+
+  .glass-panel-inner {
+    @apply shadow-sm ring-1;
+    border: 1px solid rgb(255 255 255 / calc(var(--glass-border-alpha, 0.55) * 0.85));
+    background-color: rgb(255 255 255 / var(--glass-inner-alpha, 0.4));
+    --tw-ring-color: rgb(255 255 255 / calc(var(--glass-ring-alpha, 0.4) * 0.75));
+    -webkit-backdrop-filter: blur(var(--glass-blur, 12px));
+    backdrop-filter: blur(var(--glass-blur, 12px));
+  }
+
+  /** 结果区内层块：更透，叠在 glass-panel 上 */
+  .glass-tint {
+    @apply border border-primary/20 shadow-sm ring-1 ring-white/25;
+    background-color: rgb(244 252 240 / var(--glass-tint-alpha, 0.35));
+    -webkit-backdrop-filter: blur(var(--glass-blur, 12px));
+    backdrop-filter: blur(var(--glass-blur, 12px));
+  }
+
+  .glass-tint-warm {
+    @apply border border-amber-200/45 shadow-sm ring-1 ring-white/20;
+    background-color: rgb(255 251 235 / var(--glass-tint-warm-alpha, 0.35));
+    -webkit-backdrop-filter: blur(var(--glass-blur, 12px));
+    backdrop-filter: blur(var(--glass-blur, 12px));
+  }
+
   /** 深绿色主按钮（开始批改、表单提交等）— hover 200ms */
   .btn-brand-primary {
     @apply inline-flex items-center justify-center rounded-full bg-brand px-8 py-3 text-small font-semibold text-white shadow-card outline-none transition-all duration-button ease-smooth;
@@ -146,7 +180,7 @@ body {
    * 批改步骤条：横向约 15% / 55%（第二步，left 见 StepIndicator 内联）/ 90%；连线 ::before 自 15% 至第三步圆心 90%。
    */
   .step-indicator-shell {
-    @apply w-full gap-3 overflow-x-auto rounded-card border border-black/[0.08] bg-white px-3 py-3 shadow-card transition-[box-shadow] duration-button ease-smooth;
+    @apply glass-panel w-full gap-3 overflow-x-auto rounded-card px-3 py-3 transition-[box-shadow] duration-button ease-smooth;
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto;
     /* 步骤轨 + 右侧按钮视为一行，在白框内垂直居中 */
@@ -247,6 +281,39 @@ body {
       padding-right: 1.25rem;
     }
   }
+}
+
+/* 毛玻璃浓淡默认值（设置滑条会覆盖为内联变量） */
+:root {
+  --glass-panel-alpha: 0.6;
+  --glass-inner-alpha: 0.4;
+  --glass-tint-alpha: 0.35;
+  --glass-tint-warm-alpha: 0.35;
+  --glass-border-alpha: 0.55;
+  --glass-ring-alpha: 0.4;
+  --glass-blur: 16px;
+}
+
+.glass-opacity-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 1.125rem;
+  height: 1.125rem;
+  border-radius: 9999px;
+  border: 2px solid rgb(255 255 255 / 0.9);
+  background: linear-gradient(135deg, #9ee070, #51c527);
+  box-shadow: 0 1px 4px rgb(81 197 39 / 0.35);
+  cursor: pointer;
+}
+
+.glass-opacity-range::-moz-range-thumb {
+  width: 1.125rem;
+  height: 1.125rem;
+  border-radius: 9999px;
+  border: 2px solid rgb(255 255 255 / 0.9);
+  background: linear-gradient(135deg, #9ee070, #51c527);
+  box-shadow: 0 1px 4px rgb(81 197 39 / 0.35);
+  cursor: pointer;
 }
 
 /* 用户偏好：由设置页在 document.documentElement 上切换 class */

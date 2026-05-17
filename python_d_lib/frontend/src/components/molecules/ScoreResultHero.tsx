@@ -16,10 +16,10 @@ const scoreNumClass =
   "font-bold tabular-nums tracking-tight text-[#51c527] [font-variant-numeric:tabular-nums]";
 
 const scorePanelClass =
-  "rounded-xl bg-gradient-to-br from-white via-[#f4fcf0]/90 to-[#eaf6e4]/70 px-3 py-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.9)] sm:px-6 sm:py-6";
+  "rounded-xl border border-white/35 bg-gradient-to-br from-white/35 via-[#f4fcf0]/28 to-[#eaf6e4]/22 px-3 py-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.45)] backdrop-blur-md sm:px-6 sm:py-6";
 
 const scoreLabelClass =
-  "mb-3 inline-flex rounded-full border border-[#51c527]/12 bg-gradient-to-b from-white via-[#f4fcf0] to-[#e5f5dc] px-3 py-1 text-caption font-medium text-ink-muted shadow-[0_1px_2px_rgba(81,197,39,0.08)]";
+  "mb-3 inline-flex rounded-full border border-[#51c527]/10 bg-white/35 px-3 py-1 text-caption font-medium text-ink-muted shadow-sm ring-1 ring-white/30 backdrop-blur-sm";
 
 /** 综合得分 + 得分率（对称双栏，中间分隔线） */
 export function ScoreResultHero({
@@ -37,14 +37,14 @@ export function ScoreResultHero({
   const showScaleControls = Boolean(onScaleMaxInputChange);
 
   return (
-    <article className="overflow-hidden rounded-2xl border border-black/[0.06] bg-white shadow-sm">
-      <div className="flex items-center justify-between gap-3 border-b border-black/[0.05] px-4 py-3 sm:px-5">
+    <article className="glass-tint overflow-hidden rounded-2xl">
+      <div className="flex items-center justify-between gap-3 border-b border-white/35 px-4 py-3 sm:px-5">
         <span className="text-caption font-medium text-ink-muted">本次批改</span>
         {onOpenScoringStrategy ? (
           <button
             type="button"
             onClick={onOpenScoringStrategy}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-black/[0.08] bg-[#f4fcf0] px-2.5 py-1.5 text-caption font-semibold text-[#51c527] transition hover:bg-[#eaf6e4]"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-white/40 bg-white/30 px-2.5 py-1.5 text-caption font-semibold text-[#51c527] backdrop-blur-sm transition hover:bg-white/45"
             aria-label="打开给分策略说明"
           >
             <Scale className="h-3.5 w-3.5" {...CUTE_ICON} aria-hidden />
@@ -117,7 +117,7 @@ export function ScoreResultHero({
               </span>
             </button>
             {scaleOpen ? (
-              <div className="mt-2 rounded-lg border border-black/[0.06] bg-white p-3">
+              <div className="mt-2 rounded-lg border border-white/40 bg-white/35 p-3 backdrop-blur-sm">
                 <label className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
                   <span className="text-caption font-medium text-ink-muted">卷面满分</span>
                   <input

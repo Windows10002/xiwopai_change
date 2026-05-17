@@ -3,6 +3,7 @@
  */
 
 import type { ExportDimensionFilter, ExportFilterOptions } from "@/lib/exportGrading";
+import { applyGlassThemeToDom, clampGlassOpacity, GLASS_OPACITY_DEFAULT } from "@/lib/glassTheme";
 
 export type InsightTabPref = "summary" | "strengths" | "improve";
 
@@ -28,6 +29,8 @@ export type UserPreferences = {
   exportIncludeStrengths: boolean;
   exportIncludeImprovements: boolean;
   exportIncludeWeakTags: boolean;
+  /** 毛玻璃面板浓淡：0 更透，100 更实 */
+  glassOpacity: number;
 };
 
 const STORAGE_KEY = "seewo_pi_user_prefs_v2";
@@ -52,6 +55,7 @@ export const DEFAULT_USER_PREFERENCES: UserPreferences = {
   exportIncludeStrengths: true,
   exportIncludeImprovements: true,
   exportIncludeWeakTags: true,
+  glassOpacity: GLASS_OPACITY_DEFAULT,
 };
 
 function emitPrefsChanged(): void {
@@ -89,6 +93,7 @@ function normalizePartial(o: Partial<UserPreferences> | Record<string, unknown>)
     exportIncludeStrengths: o.exportIncludeStrengths !== false,
     exportIncludeImprovements: o.exportIncludeImprovements !== false,
     exportIncludeWeakTags: o.exportIncludeWeakTags !== false,
+    glassOpacity: clampGlassOpacity(Number(o.glassOpacity ?? d.glassOpacity)),
   };
 }
 
@@ -133,6 +138,7 @@ export function saveUserPreferences(next: Partial<UserPreferences>): UserPrefere
     merged.defaultTeacherNote = merged.defaultTeacherNote.slice(0, 800);
   }
   localStorage.setItem(STORAGE_KEY, JSON.stringify(merged));
+  syncUserPreferencesToDom(merged);
   emitPrefsChanged();
   return merged;
 }
@@ -141,6 +147,7 @@ export function syncUserPreferencesToDom(p: UserPreferences): void {
   if (typeof document === "undefined") return;
   document.documentElement.classList.toggle("pref-reduce-motion", p.reduceMotion);
   document.documentElement.classList.toggle("pref-large-text", p.largerText);
+  applyGlassThemeToDom(p.glassOpacity);
 }
 
 export function exportFilterFromPreferences(p?: UserPreferences): ExportFilterOptions {
