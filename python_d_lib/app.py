@@ -298,6 +298,10 @@ def api_grading_batch_insights():
     teacher_note = _sanitize_teacher_note(payload.get("teacher_note") or "")
     group_name = _feedback_clip(payload.get("group_name"), 120)
     use_llm = payload.get("use_llm", True) is not False
+    analysis_mode = (payload.get("analysis_mode") or "batch").strip().lower()
+    if analysis_mode not in ("batch", "student_personalized"):
+        analysis_mode = "batch"
+    student_name = _feedback_clip(payload.get("student_name"), 48)
 
     try:
         out = generate_batch_insights(
@@ -307,6 +311,8 @@ def api_grading_batch_insights():
             teacher_note=teacher_note,
             group_name=group_name,
             use_llm=use_llm,
+            analysis_mode=analysis_mode,
+            student_name=student_name,
         )
         return jsonify(out)
     except Exception as e:
@@ -553,7 +559,7 @@ def uploaded_file(filename):
 
 if __name__ == "__main__":
     # 默认 5005；开发前端 Vite 代理需与此端口一致
-    port = int(os.environ.get("PORT", "5006"))
+    port = int(os.environ.get("PORT", "5007"))
     for line in startup_key_status().splitlines():
         print(f" * {line}")
     print(f" * 服务地址: http://127.0.0.1:{port}  （React 页: /math /english；开发前端请 npm run dev 并代理到此端口）")

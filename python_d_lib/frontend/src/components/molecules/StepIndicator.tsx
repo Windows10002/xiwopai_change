@@ -57,9 +57,9 @@ export function StepIndicator({ steps = DEFAULT_STEPS, current, trailingSlot }: 
               <span
                 className={[
                   "relative z-[1] flex h-9 w-9 shrink-0 items-center justify-center rounded-full border text-caption font-bold transition-all duration-button ease-smooth",
-                  isActive || isDone
-                    ? "border text-white shadow-none"
-                    : "border-gray-200 bg-gray-100 text-gray-500",
+                  isActive ? "animate-step-active-pulse border text-white shadow-none" : "",
+                  isDone ? "border text-white shadow-none" : "",
+                  !isActive && !isDone ? "border-gray-200 bg-gray-100 text-gray-500" : "",
                 ].join(" ")}
                 style={
                   isActive || isDone

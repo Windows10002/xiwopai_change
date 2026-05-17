@@ -9,6 +9,10 @@ export type GradingHistoryEntry = {
   createdAt: number;
   subject: "math" | "english";
   fileName: string;
+  /** 教师批改时标注的学生姓名，用于个性化学情汇总 */
+  studentName?: string;
+  /** 批改时选择的年级/学段 */
+  gradeLevel?: string;
   detail: GradingResultDetail;
   /** 本地 JPEG 缩略图 data URL，体积尽量控制以便 localStorage */
   thumbDataUrl?: string;

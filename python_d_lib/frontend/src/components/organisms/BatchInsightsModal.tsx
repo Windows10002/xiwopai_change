@@ -22,6 +22,9 @@ type BatchInsightsModalProps = {
   gradeLevel?: string;
   teacherNote?: string;
   groupName?: string;
+  analysisMode?: "batch" | "student_personalized";
+  studentName?: string;
+  dialogTitle?: string;
   /** 分析完成后回传，供导出 Word/Excel 使用 */
   onInsightsData?: (data: BatchInsightsResponse) => void;
 };
@@ -47,6 +50,9 @@ export function BatchInsightsModal({
   gradeLevel,
   teacherNote,
   groupName,
+  analysisMode = "batch",
+  studentName,
+  dialogTitle,
   onInsightsData,
 }: BatchInsightsModalProps) {
   const [tab, setTab] = useState<TabId>("report");
@@ -72,6 +78,8 @@ export function BatchInsightsModal({
             gradeLevel,
             teacherNote,
             groupName,
+            analysisMode,
+            studentName,
           });
           setData(res);
           onInsightsData?.(res);
@@ -106,7 +114,7 @@ export function BatchInsightsModal({
         setLoading(false);
       }
     },
-    [canAnalyze, subject, entries, gradeLevel, teacherNote, groupName, onInsightsData],
+    [analysisMode, canAnalyze, subject, entries, gradeLevel, teacherNote, groupName, studentName, onInsightsData],
   );
 
   const reportText = useMemo(() => data?.learning_report?.summary_md ?? "", [data]);
@@ -143,7 +151,7 @@ export function BatchInsightsModal({
     <AppDialog
       open={open}
       onClose={onClose}
-      title={isSinglePaper ? "学情分析与变式题" : "批量学情分析"}
+      title={dialogTitle ?? (isSinglePaper ? "学情分析与变式题" : "批量学情分析")}
       subtitle={
         isSinglePaper
           ? `${subjectLabel} · 本份作业${groupName ? ` · ${groupName}` : ""}`

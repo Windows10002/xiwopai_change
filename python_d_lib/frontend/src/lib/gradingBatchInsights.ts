@@ -267,6 +267,8 @@ export async function fetchBatchInsights(params: {
   teacherNote?: string;
   groupName?: string;
   useLlm?: boolean;
+  analysisMode?: "batch" | "student_personalized";
+  studentName?: string;
 }): Promise<BatchInsightsResponse> {
   const res = await fetch("/api/grading/batch-insights", {
     method: "POST",
@@ -278,6 +280,8 @@ export async function fetchBatchInsights(params: {
       teacher_note: params.teacherNote ?? "",
       group_name: params.groupName ?? "",
       use_llm: params.useLlm !== false,
+      analysis_mode: params.analysisMode ?? "batch",
+      student_name: params.studentName ?? "",
     }),
   });
 

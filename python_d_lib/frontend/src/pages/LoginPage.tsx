@@ -40,7 +40,7 @@ function BrandLogoRow() {
     <div className="flex flex-col items-center gap-4">
       <div className="flex flex-wrap items-center justify-center gap-3">
         <div
-          className="flex h-[3.25rem] w-[3.25rem] shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-[#73d13d] to-[#389e0d] text-2xl font-black text-white shadow-[0_10px_28px_rgba(82,196,26,0.38)] ring-[3px] ring-[#FEF9C3]/90"
+          className="animate-wiggle-soft flex h-[3.25rem] w-[3.25rem] shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-[#73d13d] to-[#389e0d] text-2xl font-black text-white shadow-[0_10px_28px_rgba(82,196,26,0.38)] ring-[3px] ring-[#FEF9C3]/90"
           aria-hidden
         >
           π
@@ -160,7 +160,9 @@ export function LoginPage() {
 
           <div className="relative mt-8 max-w-md md:mt-10">
             <p className="text-lg font-bold leading-snug text-ink md:text-xl">AI 智能批改，让学习更高效</p>
-            <p className="mt-3 text-small leading-relaxed text-ink-muted">数学作业 · 英语作文，一键上传即可获得过程性反馈</p>
+            <p className="mt-3 text-small leading-relaxed text-ink-muted">
+              数学作业 · 英语作文，一键上传即可获得过程性反馈。学生登录后可使用错题本与校园风界面。
+            </p>
           </div>
         </aside>
 

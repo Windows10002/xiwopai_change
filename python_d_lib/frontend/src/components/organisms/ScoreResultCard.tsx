@@ -37,6 +37,7 @@ import {
 } from "@/lib/gradingBatchInsights";
 import { exportFilterFromPreferences } from "@/lib/userPreferences";
 import { useUserPreferences } from "@/hooks/useUserPreferences";
+import { useIsStudentUi } from "@/hooks/useUiPersona";
 import { formatMathImprovementBlock } from "@/lib/gradingAnalysisDisplay";
 import type { DimensionScore, GradingResultDetail } from "@/types/grading";
 
@@ -143,6 +144,7 @@ export function ScoreResultCard({
   const prefs = useUserPreferences();
   const session = useAppSession();
   const isTeacher = session?.role === "teacher";
+  const isStudentUi = useIsStudentUi();
   const empty = result === null && !isGrading;
   const [insightTab, setInsightTab] = useState<InsightTab>(() => prefs.defaultInsightTab as InsightTab);
   const [strategyOpen, setStrategyOpen] = useState(false);
@@ -379,7 +381,9 @@ export function ScoreResultCard({
   );
 
   return (
-    <section className="glass-panel relative flex min-h-[320px] flex-1 flex-col rounded-card md:min-h-0 md:h-full">
+    <section
+      className={`glass-panel relative flex min-h-[320px] flex-1 flex-col rounded-card md:min-h-0 md:h-full ${isStudentUi ? "animate-bounce-in stagger-2" : ""}`}
+    >
       <header className="flex shrink-0 flex-col gap-3 border-b border-white/30 px-5 py-4 md:px-6">
         <div>
           <h2 className="text-small font-bold text-ink">批改结果</h2>
@@ -460,7 +464,10 @@ export function ScoreResultCard({
             </p>
           </div>
         ) : (
-          <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto">
+          <div
+            key={result ? `result-${result.scorePercent}-${result.overallLabel}` : "pending"}
+            className="animate-score-reveal flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto"
+          >
             {hasHardIssues ? (
               <div className="flex items-center gap-4 rounded-tile glass-tint-warm px-4 py-3">
                 <IpMascotScratchHead />

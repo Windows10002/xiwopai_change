@@ -5,6 +5,8 @@ import { HistoryDropdown } from "@/components/atoms/Navbar";
 import { PrimaryButton } from "@/components/atoms/PrimaryButton";
 import { Breadcrumb, type BreadcrumbItem } from "@/components/atoms/Breadcrumb";
 import { FabHelp } from "@/components/atoms/FabHelp";
+import { PageCampusDeco } from "@/components/atoms/PageCampusDeco";
+import { useIsStudentUi } from "@/hooks/useUiPersona";
 import { IpBrandFace } from "@/components/atoms/IpMascot";
 import { HomeworkPreview, type PaperMark } from "@/components/atoms/HomeworkPreview";
 import { StepIndicator, getGradingStepLabel } from "@/components/molecules/StepIndicator";
@@ -96,6 +98,7 @@ export function GradingWorkspace({
   const prefs = useUserPreferences();
   const session = useAppSession();
   const isTeacher = session?.role === "teacher";
+  const isStudentUi = useIsStudentUi();
   const [helpOpen, setHelpOpen] = useState(false);
   const [batchInsightsOpen, setBatchInsightsOpen] = useState(false);
   const [cachedBatchInsights, setCachedBatchInsights] = useState<BatchInsightsResponse | null>(null);
@@ -109,6 +112,7 @@ export function GradingWorkspace({
     prefs.rememberGradingContext ? prefs.defaultGradeLevel : "",
   );
   const [teacherNote, setTeacherNote] = useState(() => (prefs.rememberGradingContext ? prefs.defaultTeacherNote : ""));
+  const [studentName, setStudentName] = useState("");
   /** 与 serverPreviewByIndexRef 同步：服务端 `/uploads/...` 路径，按批改批次下标 */
   const [serverImageUrlByIndex, setServerImageUrlByIndex] = useState<Record<number, string>>({});
   /** 与 historyIdByIndexRef 同步：本地历史 IndexedDB id */
@@ -275,7 +279,7 @@ export function GradingWorkspace({
   }, [schedule]);
 
   const applyConfirmedImagePick = useCallback(
-    (gradeLevel: string, note: string) => {
+    (gradeLevel: string, note: string, name?: string) => {
       const imageFiles = pendingImagePickRef.current;
       if (!imageFiles?.length) {
         setContextModalOpen(false);
@@ -285,6 +289,7 @@ export function GradingWorkspace({
       setContextModalOpen(false);
       setTeacherGradeLevel(gradeLevel);
       setTeacherNote(note);
+      if (isTeacher) setStudentName(name?.trim() ?? "");
 
       clearTimers();
       clearGradingLiveDraft(subject);
@@ -318,7 +323,7 @@ export function GradingWorkspace({
         saveUserPreferences({ defaultGradeLevel: gradeLevel, defaultTeacherNote: note });
       }
     },
-    [clearTimers, prefs.rememberGradingContext, schedule, subject]
+    [clearTimers, isTeacher, prefs.rememberGradingContext, schedule, subject]
   );
 
   useEffect(() => {
@@ -411,6 +416,8 @@ export function GradingWorkspace({
             subject,
             fileName: file.name,
             detail,
+            ...(isTeacher && studentName.trim() ? { studentName: studentName.trim() } : {}),
+            ...(teacherGradeLevel.trim() ? { gradeLevel: teacherGradeLevel.trim() } : {}),
             ...(thumb ? { thumbDataUrl: thumb } : {}),
             ...(folderGroupKey
               ? {
@@ -492,7 +499,7 @@ export function GradingWorkspace({
     }
 
     setIsGrading(false);
-  }, [clearProgressTick, previewUrl, refreshHistory, schedule, selectedFiles, subject, teacherGradeLevel, teacherNote]);
+  }, [clearProgressTick, isTeacher, previewUrl, refreshHistory, schedule, selectedFiles, studentName, subject, teacherGradeLevel, teacherNote]);
 
   const selectPreviewFile = useCallback(
     (index: number) => {
@@ -733,9 +740,12 @@ export function GradingWorkspace({
 
   return (
     <div className="page-bg-hero-stunning relative flex min-h-screen flex-col">
+      {isStudentUi ? <PageCampusDeco /> : null}
       <div className="relative z-10 flex min-h-0 flex-1 flex-col">
         <main className={`mx-auto w-full flex-1 px-4 py-6 md:px-6 md:py-8 ${CONTENT_MAX}`}>
-          <div className="glass-panel mb-6 rounded-2xl bg-gradient-to-r from-white/55 via-primary-tint/25 to-white/50 px-3 py-3 md:flex md:items-center md:justify-between md:gap-4 md:px-4 md:py-2.5">
+          <div
+            className={`glass-panel mb-6 rounded-2xl bg-gradient-to-r from-white/55 via-primary-tint/25 to-white/50 px-3 py-3 md:flex md:items-center md:justify-between md:gap-4 md:px-4 md:py-2.5 ${isStudentUi ? "animate-bounce-in" : ""}`}
+          >
             <div className="flex min-w-0 flex-1 flex-col gap-2.5 sm:flex-row sm:items-center sm:gap-3 md:gap-4">
               <div className="flex shrink-0 items-center gap-2 md:gap-2.5">
                 <div className="flex shrink-0 items-center justify-center rounded-xl border border-primary/20 bg-white/90 p-0.5 shadow-sm ring-1 ring-primary/10 sm:rounded-2xl sm:p-1">
@@ -783,7 +793,17 @@ export function GradingWorkspace({
             </div>
           </div>
 
-          <div key={step} className="animate-step-flow">
+          {isStudentUi ? (
+            <p className="campus-banner-strip animate-fade-up-in mb-4">
+              <span>📚 校园智能批改</span>
+              <span className="text-ink-subtle" aria-hidden>
+                ·
+              </span>
+              <span>过程分看得见，错题自动进错题本</span>
+            </p>
+          ) : null}
+
+          <div key={step} className={isStudentUi ? "animate-step-flow" : undefined}>
             <StepIndicator
               current={step}
               trailingSlot={
@@ -799,7 +819,9 @@ export function GradingWorkspace({
               }
             />
             <div className="mt-6 grid grid-cols-1 gap-6 md:mt-8 md:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] md:gap-8 md:items-stretch">
-              <div className="glass-panel flex min-h-0 min-w-0 flex-1 flex-col gap-4 rounded-[1.35rem] p-4 md:h-full md:min-h-0 md:p-5">
+              <div
+                className={`glass-panel flex min-h-0 min-w-0 flex-1 flex-col gap-4 rounded-[1.35rem] p-4 md:h-full md:min-h-0 md:p-5 ${isStudentUi ? "animate-bounce-in stagger-1" : ""}`}
+              >
                 <UploadDropzone
                   title={uploadTitle}
                   hint={combinedHint}
@@ -950,6 +972,8 @@ export function GradingWorkspace({
         initialGradeLevel={prefs.defaultGradeLevel}
         initialTeacherNote={prefs.defaultTeacherNote}
         rememberContext={prefs.rememberGradingContext}
+        collectStudentName={isTeacher}
+        initialStudentName={studentName}
         onConfirm={applyConfirmedImagePick}
         onCancel={cancelImagePick}
       />

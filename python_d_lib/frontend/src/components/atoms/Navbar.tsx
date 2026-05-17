@@ -6,6 +6,8 @@ import { IpBrandFace } from "@/components/atoms/IpMascot";
 import { CUTE_ICON } from "@/components/atoms/cuteIcon";
 import { clearSession, sessionDisplayLabel } from "@/lib/appSession";
 import { useAppSession } from "@/hooks/useAppSession";
+import { useUiPersona } from "@/hooks/useUiPersona";
+import { countWrongBookItems } from "@/lib/wrongQuestionBook";
 
 import {
   HistoryDropdown,
@@ -66,6 +68,8 @@ export function Navbar({
   showHistoryDropdown = true,
 }: NavbarProps) {
   const session = useAppSession();
+  const persona = useUiPersona();
+  const wrongCount = persona === "student" ? countWrongBookItems() : 0;
 
   return (
     <header className="sticky top-0 z-40 border-b border-black/[0.05] bg-white/[0.93] shadow-[0_1px_0_rgba(15,45,35,0.04)] backdrop-blur-md">
@@ -93,6 +97,28 @@ export function Navbar({
           <NavItem to="/">首页</NavItem>
           <NavItem to="/math">数学批改</NavItem>
           <NavItem to="/english">英语批改</NavItem>
+          {persona === "teacher" ? (
+            <NavItem to="/student-analytics">学生学情</NavItem>
+          ) : null}
+          {persona === "student" ? (
+            <NavLink
+              to="/wrong-book"
+              className={({ isActive }) =>
+                [
+                  "group relative inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-full px-4 py-2.5 text-small font-semibold outline-none transition-colors duration-button ease-smooth",
+                  "focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-2",
+                  isActive ? "bg-primary-light text-ink-navActive" : "text-ink/80 hover:bg-gray-50 hover:text-ink",
+                ].join(" ")
+              }
+            >
+              错题本
+              {wrongCount > 0 ? (
+                <span className="rounded-full bg-primary px-1.5 py-0.5 text-[0.625rem] font-black leading-none text-white">
+                  {wrongCount > 99 ? "99+" : wrongCount}
+                </span>
+              ) : null}
+            </NavLink>
+          ) : null}
         </nav>
 
         <div className="flex shrink-0 items-center justify-end gap-2">

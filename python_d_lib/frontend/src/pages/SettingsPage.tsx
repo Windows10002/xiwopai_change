@@ -127,7 +127,17 @@ export function SettingsPage() {
 
           {sessionInfo?.role === "teacher" ? <TeacherGradingDisputePanel /> : null}
           {sessionInfo?.role === "student" ? (
-            <StudentGradingDisputePanel studentGrade={sessionInfo.studentGrade} />
+            <>
+              <PrefSection title="错题本" desc="自动收录批改中的错题，便于课后复习。">
+                <Link
+                  to="/wrong-book"
+                  className="inline-flex min-h-11 items-center justify-center rounded-xl border border-primary/25 bg-primary-tint/80 px-4 text-small font-bold text-ink-navActive transition hover:border-primary/40 hover:bg-primary-tint"
+                >
+                  打开我的错题本
+                </Link>
+              </PrefSection>
+              <StudentGradingDisputePanel studentGrade={sessionInfo.studentGrade} />
+            </>
           ) : null}
 
           <PrefSection title="界面与辅助" desc="影响全站字号、动画与帮助入口。">

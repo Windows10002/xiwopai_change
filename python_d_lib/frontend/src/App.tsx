@@ -5,6 +5,10 @@ import { EnglishGradingPage } from "@/pages/EnglishGradingPage";
 import { MathGradingPage } from "@/pages/MathGradingPage";
 import { LoginPage } from "@/pages/LoginPage";
 import { SettingsPage } from "@/pages/SettingsPage";
+import { WrongBookPage } from "@/pages/WrongBookPage";
+import { ProtectedStudentRoute } from "@/components/organisms/ProtectedStudentRoute";
+import { ProtectedTeacherRoute } from "@/components/organisms/ProtectedTeacherRoute";
+import { StudentAnalyticsPage } from "@/pages/StudentAnalyticsPage";
 import { APP_PREFS_CHANGED, loadUserPreferences, syncUserPreferencesToDom } from "@/lib/userPreferences";
 
 export default function App() {
@@ -25,6 +29,22 @@ export default function App() {
         <Route path="/math" element={<MathGradingPage />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/settings" element={<SettingsPage />} />
+        <Route
+          path="/wrong-book"
+          element={
+            <ProtectedStudentRoute>
+              <WrongBookPage />
+            </ProtectedStudentRoute>
+          }
+        />
+        <Route
+          path="/student-analytics"
+          element={
+            <ProtectedTeacherRoute>
+              <StudentAnalyticsPage />
+            </ProtectedTeacherRoute>
+          }
+        />
       </Routes>
     </div>
   );

@@ -25,7 +25,10 @@ type GradingContextModalProps = {
   initialGradeLevel?: string;
   initialTeacherNote?: string;
   rememberContext?: boolean;
-  onConfirm: (gradeLevel: string, teacherNote: string) => void;
+  /** 教师端：收集学生姓名，用于个性化学情 */
+  collectStudentName?: boolean;
+  initialStudentName?: string;
+  onConfirm: (gradeLevel: string, teacherNote: string, studentName?: string) => void;
   onCancel: () => void;
 };
 
@@ -35,12 +38,15 @@ export function GradingContextModal({
   initialGradeLevel = "",
   initialTeacherNote = "",
   rememberContext = false,
+  collectStudentName = false,
+  initialStudentName = "",
   onConfirm,
   onCancel,
 }: GradingContextModalProps) {
   const titleId = useId();
   const [gradeLevel, setGradeLevel] = useState("");
   const [teacherNote, setTeacherNote] = useState("");
+  const [studentName, setStudentName] = useState("");
 
   useEffect(() => {
     if (!open) return;
@@ -51,7 +57,8 @@ export function GradingContextModal({
       setGradeLevel("");
       setTeacherNote("");
     }
-  }, [open, rememberContext, initialGradeLevel, initialTeacherNote]);
+    setStudentName(collectStudentName ? initialStudentName : "");
+  }, [open, rememberContext, initialGradeLevel, initialTeacherNote, collectStudentName, initialStudentName]);
 
   useEffect(() => {
     if (!open) return;
@@ -92,6 +99,22 @@ export function GradingContextModal({
           </button>
         </div>
         <div className="space-y-4 px-5 py-4">
+          {collectStudentName ? (
+            <div>
+              <label htmlFor="grading-student-name" className="mb-1.5 block text-small font-bold text-ink">
+                学生姓名
+              </label>
+              <input
+                id="grading-student-name"
+                type="text"
+                value={studentName}
+                onChange={(e) => setStudentName(e.target.value.slice(0, 32))}
+                maxLength={32}
+                placeholder="例如：张三（用于个性化学情汇总，选填）"
+                className="w-full rounded-xl border border-black/[0.1] bg-white px-3 py-2.5 text-small text-ink shadow-sm outline-none transition focus:border-primary/40 focus:ring-2 focus:ring-primary/20"
+              />
+            </div>
+          ) : null}
           <div>
             <label htmlFor="grading-grade-level" className="mb-1.5 block text-small font-bold text-ink">
               学生年级
@@ -135,7 +158,9 @@ export function GradingContextModal({
           </button>
           <button
             type="button"
-            onClick={() => onConfirm(gradeLevel.trim(), teacherNote.trim())}
+            onClick={() =>
+              onConfirm(gradeLevel.trim(), teacherNote.trim(), collectStudentName ? studentName.trim() : undefined)
+            }
             className="btn-brand-primary min-h-10 px-6 text-small"
           >
             继续

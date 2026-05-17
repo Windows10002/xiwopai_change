@@ -148,16 +148,31 @@ def aggregate_batch_items(subject: str, items: list[dict]) -> dict[str, Any]:
     }
 
 
-def _rule_learning_report(stats: dict, *, group_name: str = "", grade_level: str = "") -> dict:
+def _rule_learning_report(
+    stats: dict,
+    *,
+    group_name: str = "",
+    grade_level: str = "",
+    analysis_mode: str = "batch",
+    student_name: str = "",
+) -> dict:
     paper_count = int(stats.get("paper_count") or 0)
     is_single = paper_count == 1
-    scope = group_name or ("本份作业" if is_single else "本批作业")
+    personalized = analysis_mode == "student_personalized"
+    if personalized:
+        scope = student_name.strip() or "未标注学生"
+        title = "## 学生个性化学情分析报告"
+    else:
+        scope = group_name or ("本份作业" if is_single else "本批作业")
+        title = "## 学情分析报告"
     lines = [
-        "## 学情分析报告",
+        title,
         "",
-        f"- **批改范围**：{scope}",
+        f"- **{'学生' if personalized else '批改范围'}**：{scope}",
     ]
-    if is_single:
+    if personalized:
+        lines.append(f"- **累计作业份数**：{paper_count} 份")
+    elif is_single:
         lines.append("- **类型**：单份作业")
     else:
         lines.append(f"- **份数**：{paper_count} 份")
@@ -165,6 +180,15 @@ def _rule_learning_report(stats: dict, *, group_name: str = "", grade_level: str
         lines.append(f"- **年级/学段**：{grade_level}")
     if stats.get("avg_score_percent") is not None:
         lines.append(f"- **平均得分率**：{stats['avg_score_percent']}%")
+
+    if personalized and stats.get("papers"):
+        lines.extend(["", "### 各次作业概览"])
+        for p in (stats.get("papers") or [])[:12]:
+            fn = p.get("file_name") or "未命名"
+            sc = p.get("score_percent")
+            sc_txt = f"{sc}%" if sc is not None else "—"
+            err_n = p.get("error_count", 0)
+            lines.append(f"- {fn}：得分率 {sc_txt}，错题约 {err_n} 道")
 
     lines.extend(["", "### 整体情况"])
     dist = stats.get("status_distribution") or {}
@@ -334,14 +358,24 @@ def _enrich_with_llm(
     grade_level: str = "",
     teacher_note: str = "",
     group_name: str = "",
+    analysis_mode: str = "batch",
+    student_name: str = "",
 ) -> tuple[dict, dict]:
     """在规则报告基础上用 LLM 润色学情报告并生成变式题 JSON。"""
-    learning = _rule_learning_report(stats, group_name=group_name, grade_level=grade_level)
+    learning = _rule_learning_report(
+        stats,
+        group_name=group_name,
+        grade_level=grade_level,
+        analysis_mode=analysis_mode,
+        student_name=student_name,
+    )
     variants = _rule_knowledge_variants(stats, subject=subject, grade_level=grade_level)
 
     payload = json.dumps(
         {
             "subject": subject,
+            "analysis_mode": analysis_mode,
+            "student_name": _clip(student_name, 48),
             "grade_level": grade_level,
             "teacher_note": _clip(teacher_note, 400),
             "group_name": group_name,
@@ -358,17 +392,33 @@ def _enrich_with_llm(
 
     paper_count = int(stats.get("paper_count") or 0)
     is_single = paper_count == 1
+    personalized = analysis_mode == "student_personalized"
     subj_cn = "数学" if subject == "math" else "英语作文"
-    system = (
-        f"你是{subj_cn}教研员，根据{'一份' if is_single else '一批'}已批改作业的聚合数据输出 JSON，不要输出 markdown 代码块外的说明。"
-        "必须只返回一个 JSON 对象，包含 learning_report 与 knowledge_variants 两个字段。"
-    )
+    if personalized:
+        system = (
+            f"你是{subj_cn}班主任/任课教师助手，根据**同一学生**多次作业的聚合数据输出个性化学情 JSON。"
+            "必须只返回一个 JSON 对象，包含 learning_report 与 knowledge_variants 两个字段。"
+        )
+    else:
+        system = (
+            f"你是{subj_cn}教研员，根据{'一份' if is_single else '一批'}已批改作业的聚合数据输出 JSON，不要输出 markdown 代码块外的说明。"
+            "必须只返回一个 JSON 对象，包含 learning_report 与 knowledge_variants 两个字段。"
+        )
     variant_req = (
-        "变式题 2～4 道，紧扣本份作业错题与薄弱点，题干具体可练习，符合年级水平。"
-        if is_single
-        else "变式题 4～8 道，覆盖本批高频薄弱点，题干具体可练习，符合年级水平。"
+        "变式题 2～4 道，紧扣该生稳定薄弱点，难度分层（基础/中等），题干具体可练习。"
+        if personalized
+        else (
+            "变式题 2～4 道，紧扣本份作业错题与薄弱点，题干具体可练习，符合年级水平。"
+            if is_single
+            else "变式题 4～8 道，覆盖本批高频薄弱点，题干具体可练习，符合年级水平。"
+        )
     )
-    user = f"""根据以下{'单份' if is_single else '批量'}批改聚合数据，生成学情分析与变式题建议。
+    scope_label = (
+        f"学生「{student_name or '未标注'}」的 {paper_count} 次作业"
+        if personalized
+        else ("单份" if is_single else "批量")
+    )
+    user = f"""根据以下{scope_label}批改聚合数据，生成{'学生个性化学情分析与分层巩固' if personalized else '学情分析与变式题建议'}。
 
 数据：
 {payload}
@@ -433,8 +483,11 @@ def generate_batch_insights(
     teacher_note: str = "",
     group_name: str = "",
     use_llm: bool = True,
+    analysis_mode: str = "batch",
+    student_name: str = "",
 ) -> dict[str, Any]:
     stats = aggregate_batch_items(subject, items)
+    mode = (analysis_mode or "batch").strip().lower()
     if use_llm and stats.get("paper_count", 0) > 0:
         learning, variants = _enrich_with_llm(
             subject,
@@ -442,9 +495,17 @@ def generate_batch_insights(
             grade_level=grade_level,
             teacher_note=teacher_note,
             group_name=group_name,
+            analysis_mode=mode,
+            student_name=student_name,
         )
     else:
-        learning = _rule_learning_report(stats, group_name=group_name, grade_level=grade_level)
+        learning = _rule_learning_report(
+            stats,
+            group_name=group_name,
+            grade_level=grade_level,
+            analysis_mode=mode,
+            student_name=student_name,
+        )
         variants = _rule_knowledge_variants(stats, subject=subject, grade_level=grade_level)
 
     return {
