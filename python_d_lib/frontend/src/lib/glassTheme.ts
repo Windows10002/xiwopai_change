@@ -9,18 +9,21 @@ export function clampGlassOpacity(value: number): number {
 /** 将 0–100 偏好值映射为 documentElement 上的 CSS 变量 */
 export function glassOpacityToCssVars(opacity: number): Record<string, string> {
   const p = clampGlassOpacity(opacity) / 100;
-  const panel = 0.1 + p * 0.82;
-  const inner = 0.06 + p * 0.64;
-  const tint = 0.05 + p * 0.48;
-  const warm = 0.05 + p * 0.48;
-  const border = 0.22 + p * 0.48;
-  const ring = 0.12 + p * 0.52;
-  const blurPx = Math.round(6 + p * 18);
-  const scrim = 0.04 + p * 0.32;
+  /** 0 档更透：白底 alpha 与模糊均压低，避免「最淡仍发白」 */
+  const panel = 0.02 + p * 0.86;
+  const inner = 0.012 + p * 0.62;
+  const tint = 0.018 + p * 0.46;
+  const warm = 0.018 + p * 0.46;
+  const border = 0.06 + p * 0.5;
+  const ring = 0.04 + p * 0.48;
+  const blurPx = Math.round(2 + p * 20);
+  const scrimBlurPx = Math.round(1 + p * 14);
+  const scrim = 0.006 + p * 0.26;
   return {
     "--glass-panel-alpha": panel.toFixed(3),
     "--glass-inner-alpha": inner.toFixed(3),
     "--glass-scrim-alpha": scrim.toFixed(3),
+    "--glass-scrim-blur": `${scrimBlurPx}px`,
     "--glass-tint-alpha": tint.toFixed(3),
     "--glass-tint-warm-alpha": warm.toFixed(3),
     "--glass-border-alpha": border.toFixed(3),

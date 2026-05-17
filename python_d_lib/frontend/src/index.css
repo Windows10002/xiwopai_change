@@ -287,7 +287,8 @@ body {
 :root {
   --glass-panel-alpha: 0.6;
   --glass-inner-alpha: 0.4;
-  --glass-scrim-alpha: 0.2;
+  --glass-scrim-alpha: 0.16;
+  --glass-scrim-blur: 10px;
   --glass-tint-alpha: 0.35;
   --glass-tint-warm-alpha: 0.35;
   --glass-border-alpha: 0.55;
@@ -297,9 +298,9 @@ body {
 
 /** 弹层遮罩（选择图片等），随浓淡滑条变化 */
 .glass-scrim {
-  background-color: rgb(255 255 255 / var(--glass-scrim-alpha, 0.2));
-  -webkit-backdrop-filter: blur(var(--glass-blur, 12px));
-  backdrop-filter: blur(var(--glass-blur, 12px));
+  background-color: rgb(255 255 255 / var(--glass-scrim-alpha, 0.16));
+  -webkit-backdrop-filter: blur(var(--glass-scrim-blur, 8px));
+  backdrop-filter: blur(var(--glass-scrim-blur, 8px));
 }
 
 /** 弹层内次级按钮/输入底 */
