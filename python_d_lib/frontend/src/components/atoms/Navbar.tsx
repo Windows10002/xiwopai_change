@@ -114,12 +114,12 @@ export function HistoryDropdown({ variant = "nav", subjectScope = "all" }: Histo
   const triggerClass =
     variant === "toolbar"
       ? [
-          "inline-flex min-h-9 items-center gap-1 rounded-xl bg-primary-tint px-3 py-1.5 text-caption font-bold text-[#006D41] shadow-sm ring-1 ring-brand/18 transition",
+          "inline-flex min-h-9 items-center gap-1 rounded-xl bg-primary-tint px-3 py-1.5 text-caption font-bold text-ink-navActive shadow-sm ring-1 ring-brand/18 transition",
           "hover:bg-primary-light hover:ring-brand/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-2 focus-visible:ring-offset-white",
         ].join(" ")
       : [
           "inline-flex min-h-11 items-center gap-1 rounded-full border border-black/[0.06] bg-white px-4 py-2 text-small font-semibold text-ink shadow-sm transition",
-          "hover:border-primary/25 hover:text-[#006D41] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-2 focus-visible:ring-offset-white",
+          "hover:border-primary/25 hover:text-ink-navActive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-2 focus-visible:ring-offset-white",
         ].join(" ");
 
   return (
@@ -152,7 +152,7 @@ export function HistoryDropdown({ variant = "nav", subjectScope = "all" }: Histo
               <div className={subjectScope === "all" ? "mb-3" : ""}>
                 {subjectScope === "all" ? (
                   <div className="mb-1.5 flex items-center justify-between">
-                    <span className="text-[0.7rem] font-extrabold text-[#006D41]">数学</span>
+                    <span className="text-[0.7rem] font-extrabold text-ink-navActive">数学</span>
                     <button type="button" onClick={goMathPanel} className="text-[0.65rem] font-bold text-brand hover:underline">
                       打开数学批改页
                     </button>
@@ -177,7 +177,7 @@ export function HistoryDropdown({ variant = "nav", subjectScope = "all" }: Histo
                           className="flex w-full items-center justify-between gap-2 rounded-xl border border-black/[0.06] bg-white px-2.5 py-2 text-left text-[0.7rem] transition hover:border-brand/35 hover:bg-primary-tint/40"
                         >
                           <span className="min-w-0 flex-1 truncate font-semibold text-ink">{rowLabel(row)}</span>
-                          <span className="shrink-0 font-black text-[#006D41]">{rowPct(row)}</span>
+                          <span className="shrink-0 font-black text-ink-navActive">{rowPct(row)}</span>
                         </button>
                       </li>
                     ))}
@@ -296,8 +296,8 @@ export function Navbar({
               [
                 "inline-flex min-h-10 min-w-10 items-center justify-center rounded-full border shadow-sm transition duration-button ease-smooth focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-2 focus-visible:ring-offset-white md:min-h-11 md:min-w-11",
                 isActive
-                  ? "border-brand/35 bg-primary-light text-[#006D41] ring-2 ring-primary/20"
-                  : "border-black/[0.06] bg-white text-ink-muted hover:border-primary/25 hover:text-[#006D41]",
+                  ? "border-brand/35 bg-primary-light text-ink-navActive ring-2 ring-primary/20"
+                  : "border-black/[0.06] bg-white text-ink-muted hover:border-primary/25 hover:text-ink-navActive",
               ].join(" ")
             }
           >
@@ -306,7 +306,7 @@ export function Navbar({
           {session ? (
             <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
               <span
-                className="inline-flex max-w-[7.5rem] items-center gap-1.5 rounded-full border border-primary/20 bg-primary-tint/90 px-2.5 py-1.5 text-[0.65rem] font-bold text-[#006D41] shadow-sm sm:max-w-none sm:px-3 sm:text-caption"
+                className="inline-flex max-w-[7.5rem] items-center gap-1.5 rounded-full border border-primary/20 bg-primary-tint/90 px-2.5 py-1.5 text-[0.65rem] font-bold text-ink-navActive shadow-sm sm:max-w-none sm:px-3 sm:text-caption"
                 title={`已登录：${sessionDisplayLabel(session)}`}
               >
                 <UserRound className="h-4 w-4 shrink-0" {...CUTE_ICON} aria-hidden />

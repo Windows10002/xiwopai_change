@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { CheckCircle2, FileSpreadsheet, FileText, Lightbulb, ListChecks, Sparkles, X, BarChart3, AlertTriangle, BookOpen, Scale, MessageSquareWarning, MessagesSquare } from "lucide-react";
 
 import { CUTE_ICON } from "@/components/atoms/cuteIcon";
+import { IconBadge } from "@/components/atoms/IconBadge";
 import { buildScoringStrategyModel, type ScoringStrategyModel } from "@/lib/scoringStrategyText";
 import { submitGradingFeedback, traceToFeedbackFields, type GradingFeedbackTrace } from "@/lib/gradingFeedbackApi";
 import { submitGradingDispute } from "@/lib/gradingDisputeApi";
@@ -21,6 +22,9 @@ import { exportFilterFromPreferences } from "@/lib/userPreferences";
 import { useUserPreferences } from "@/hooks/useUserPreferences";
 import { formatMathImprovementBlock } from "@/lib/gradingAnalysisDisplay";
 import type { DimensionScore, GradingResultDetail } from "@/types/grading";
+
+/** 给分策略说明卡 · 薄荷绿渐变（与综合得分区一致） */
+const STRATEGY_SECTION_GRADIENT = "from-primary/10 via-primary-tint to-white";
 
 export type { DimensionScore } from "@/types/grading";
 
@@ -64,12 +68,10 @@ function DimensionScoresPanel({
   }, [dimensions, compactWhenMany]);
 
   return (
-    <div className="rounded-2xl border border-black/[0.08] bg-gradient-to-b from-white to-primary-tint/25 p-3 shadow-inner ring-1 ring-primary/10">
+    <div className="rounded-2xl border border-black/[0.06] bg-white p-4 shadow-sm ring-1 ring-black/[0.04]">
       <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
         <h3 className="flex min-w-0 items-center gap-2 text-caption font-bold uppercase tracking-wide text-ink-muted">
-          <span className="inline-flex rounded-xl bg-primary-muted/90 p-1.5 text-primary ring-1 ring-primary/15">
-            <ListChecks className="h-4 w-4" {...CUTE_ICON} aria-hidden />
-          </span>
+          <IconBadge icon={ListChecks} size="sm" />
           <span className="truncate">{sectionTitle}</span>
           <span className="rounded-full bg-black/[0.06] px-2 py-0.5 text-[0.65rem] font-semibold normal-case text-ink-muted">
             {dimensions.length} 项
@@ -79,7 +81,7 @@ function DimensionScoresPanel({
           <button
             type="button"
             onClick={() => setOpen((v) => !v)}
-            className="shrink-0 rounded-full border border-primary/25 bg-white px-3 py-1 text-[0.65rem] font-bold text-[#006D41] shadow-sm transition hover:border-brand/40"
+            className="shrink-0 rounded-full border border-primary/25 bg-white px-3 py-1 text-[0.65rem] font-bold text-ink-navActive shadow-sm transition hover:border-brand/40"
           >
             {open ? "收起列表" : `展开全部`}
           </button>
@@ -337,7 +339,7 @@ export function ScoreResultCard({
       onClick={() => setInsightTab(id)}
       className={[
         "min-h-9 flex-1 rounded-lg px-2 py-2 text-[0.7rem] font-bold transition sm:px-3 sm:text-caption",
-        insightTab === id ? "bg-white text-[#006D41] shadow-sm ring-1 ring-primary/15" : "text-ink-muted hover:text-ink",
+        insightTab === id ? "bg-white text-ink-navActive shadow-sm ring-1 ring-primary/20" : "text-ink-muted hover:bg-white/60 hover:text-ink",
       ].join(" ")}
     >
       {label}
@@ -345,24 +347,25 @@ export function ScoreResultCard({
   );
 
   return (
-    <section className="relative flex min-h-[320px] flex-1 flex-col rounded-card border border-black/[0.08] bg-surface-card shadow-card md:min-h-0 md:h-full">
-      <header className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-black/[0.06] px-5 py-4 md:px-6">
-        <div>
-          <h2 className="text-small font-bold text-ink">批改结果</h2>
-          <p className="mt-0.5 text-caption text-ink-muted">图像识别 · 过程性评分</p>
-        </div>
-        {result && !isGrading ? (
-          <div className="flex shrink-0 flex-wrap gap-2">
+    <section className="relative flex min-h-[320px] flex-1 flex-col overflow-hidden rounded-2xl border border-black/[0.06] bg-white shadow-[0_4px_24px_rgba(15,23,42,0.06)] md:min-h-0 md:h-full">
+      <header className="shrink-0 border-b border-black/[0.05] bg-gradient-to-b from-primary-tint/50 to-white px-4 py-4 md:px-5">
+        <div className="flex flex-col gap-3">
+          <div>
+            <h2 className="text-body font-extrabold tracking-tight text-ink">批改结果</h2>
+            <p className="mt-0.5 text-caption text-ink-muted">图像识别 · 过程性评分</p>
+          </div>
+          {result && !isGrading ? (
+            <div className="flex flex-wrap gap-2">
             <button
               type="button"
               onClick={() => {
                 setExportOpts(exportFilterFromPreferences(prefs));
                 setExportKind("docx");
               }}
-              className="inline-flex items-center gap-1.5 rounded-full border border-black/[0.1] bg-white px-3 py-1.5 text-[0.65rem] font-bold text-ink shadow-sm transition hover:border-primary/35 hover:text-[#006D41] sm:text-caption"
+              className="inline-flex items-center gap-2 rounded-xl border border-black/[0.07] bg-white px-3 py-2 text-caption font-semibold text-ink shadow-sm transition hover:border-primary/25 hover:bg-primary-tint/40"
             >
-              <FileText className="h-4 w-4 shrink-0" {...CUTE_ICON} aria-hidden />
-              导出 Word
+              <IconBadge icon={FileText} size="sm" />
+              Word
             </button>
             <button
               type="button"
@@ -370,10 +373,10 @@ export function ScoreResultCard({
                 setExportOpts(exportFilterFromPreferences(prefs));
                 setExportKind("xlsx");
               }}
-              className="inline-flex items-center gap-1.5 rounded-full border border-brand/25 bg-primary-tint/90 px-3 py-1.5 text-[0.65rem] font-bold text-[#006D41] shadow-sm transition hover:border-brand/45 sm:text-caption"
+              className="inline-flex items-center gap-2 rounded-xl border border-black/[0.07] bg-white px-3 py-2 text-caption font-semibold text-ink shadow-sm transition hover:border-primary/25 hover:bg-primary-tint/40"
             >
-              <FileSpreadsheet className="h-4 w-4 shrink-0" {...CUTE_ICON} aria-hidden />
-              导出 Excel
+              <IconBadge icon={FileSpreadsheet} size="sm" />
+              Excel
             </button>
             {prefs.showQuestionFeedback ? (
               <button
@@ -383,20 +386,23 @@ export function ScoreResultCard({
                   setFeedbackText("");
                   setFeedbackErr(null);
                 }}
-                className="inline-flex items-center gap-1.5 rounded-full border border-amber-200/90 bg-amber-50/95 px-3 py-1.5 text-[0.65rem] font-bold text-amber-950 shadow-sm transition hover:border-amber-400 sm:text-caption"
-                title="对整卷批改总体意见、多题系统性误判等，一条说明即可（会附带当前卷截图 id）"
+                className="inline-flex items-center gap-2 rounded-xl border border-amber-200/80 bg-amber-50/90 px-3 py-2 text-caption font-semibold text-amber-950 shadow-sm transition hover:bg-amber-50"
+                title="对整卷批改总体意见"
               >
-                <MessagesSquare className="h-4 w-4 shrink-0" {...CUTE_ICON} aria-hidden />
+                <span className="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-white shadow-sm ring-1 ring-amber-200/60">
+                  <MessagesSquare className="h-3.5 w-3.5 text-amber-800" {...CUTE_ICON} aria-hidden />
+                </span>
                 整卷反馈
               </button>
             ) : null}
-          </div>
-        ) : null}
+            </div>
+          ) : null}
+        </div>
       </header>
 
       <div
         className={[
-          "flex min-h-0 flex-1 flex-col px-5 py-6 md:px-6",
+          "flex min-h-0 flex-1 flex-col bg-surface-page/30 px-4 py-5 md:px-5 md:py-6",
           isGrading ? "min-h-[min(52vh,26rem)] md:min-h-0" : "",
         ].join(" ")}
       >
@@ -419,7 +425,7 @@ export function ScoreResultCard({
             </p>
           </div>
         ) : (
-          <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto">
+          <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto">
             {hasHardIssues ? (
               <div className="flex items-center gap-4 rounded-tile border border-amber-200/80 bg-amber-50/95 px-4 py-3 shadow-sm">
                 <IpMascotScratchHead />
@@ -428,9 +434,11 @@ export function ScoreResultCard({
                 </p>
               </div>
             ) : (
-              <div className="flex items-center gap-4 rounded-tile border border-primary/25 bg-primary-tint px-4 py-3 shadow-sm">
-                <IpMascotTrophy />
-                <p className="text-left text-small font-semibold leading-snug text-[#006D41]">
+              <div className="flex items-center gap-3 overflow-hidden rounded-2xl border border-primary/15 bg-gradient-to-r from-primary-tint via-white to-primary-tint/40 px-4 py-3.5 shadow-sm">
+                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-white shadow-sm ring-1 ring-primary/10">
+                  <IpMascotTrophy />
+                </div>
+                <p className="min-w-0 flex-1 text-small font-bold leading-snug text-ink-navActive">
                   太棒了！这次做得很好！
                 </p>
               </div>
@@ -438,7 +446,6 @@ export function ScoreResultCard({
 
             <ScoreResultHero
               scorePercent={result!.scorePercent}
-              overallLabel={result!.overallLabel}
               onOpenScoringStrategy={() => setStrategyOpen(true)}
               scaledScoreDisplay={scaledScoreDisplay}
               scaleMax={scaleMaxParsed}
@@ -475,11 +482,9 @@ export function ScoreResultCard({
               }
             />
 
-            <div className="rounded-[1.35rem] border border-primary/18 bg-gradient-to-br from-white via-primary-tint/30 to-white p-3 shadow-sm ring-1 ring-primary/10 sm:p-4">
+            <div className="rounded-2xl border border-black/[0.06] bg-white p-4 shadow-sm ring-1 ring-black/[0.04] sm:p-5">
               <div className="mb-3 flex items-center gap-2">
-                <span className="inline-flex rounded-xl bg-primary-muted/90 p-1.5 text-primary ring-1 ring-primary/15">
-                  <Sparkles className="h-4 w-4" {...CUTE_ICON} aria-hidden />
-                </span>
+                <IconBadge icon={Sparkles} size="sm" />
                 <h3 className="text-small font-extrabold text-ink">总评与详情</h3>
               </div>
 
@@ -503,9 +508,9 @@ export function ScoreResultCard({
                           key={`${index}-${t}`}
                           className="flex gap-2 rounded-xl border border-emerald-200/70 bg-emerald-50/60 px-3 py-2 text-small leading-relaxed text-slate-700"
                         >
-                          <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-[#006D41]" {...CUTE_ICON} aria-hidden />
+                          <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-ink-navActive" {...CUTE_ICON} aria-hidden />
                           <span className="min-w-0 flex-1">
-                            <span className="font-bold text-[#006D41]">{index + 1}.</span>{" "}
+                            <span className="font-bold text-ink-navActive">{index + 1}.</span>{" "}
                             <span className="whitespace-pre-wrap [text-wrap:pretty]">
                               <MathPrettyText text={t} />
                             </span>
@@ -547,7 +552,7 @@ export function ScoreResultCard({
               {result!.weakKnowledgeTags.length === 0 ? (
                 <div className="flex flex-col items-center rounded-tile border border-dashed border-primary/20 bg-primary-tint/40 px-4 py-8 text-center">
                   <IpMascotPeaceGreat />
-                  <p className="mt-3 text-small font-semibold text-[#006D41]">太棒了！没有薄弱知识点</p>
+                  <p className="mt-3 text-small font-semibold text-ink-navActive">太棒了！没有薄弱知识点</p>
                   <p className="mt-1 max-w-xs text-caption text-ink-muted">本次作答暂未标记明显薄弱项，继续保持～</p>
                 </div>
               ) : (
@@ -555,7 +560,7 @@ export function ScoreResultCard({
                   {result!.weakKnowledgeTags.map((tag) => (
                     <span
                       key={tag}
-                      className="rounded-full border border-primary/25 bg-primary-tint px-3 py-1.5 text-caption font-semibold text-[#006D41]"
+                      className="rounded-full border border-primary/25 bg-primary-tint px-3 py-1.5 text-caption font-semibold text-ink-navActive"
                     >
                       {tag}
                     </span>
@@ -621,7 +626,7 @@ export function ScoreResultCard({
                   <label key={key} className="flex cursor-pointer items-center gap-2 text-small text-ink">
                     <input
                       type="checkbox"
-                      className="h-4 w-4 rounded border-black/[0.2] text-[#006D41] focus:ring-brand"
+                      className="h-4 w-4 rounded border-black/[0.2] text-ink-navActive focus:ring-brand"
                       checked={exportOpts[key]}
                       onChange={(e) => setExportOpts((o) => ({ ...o, [key]: e.target.checked }))}
                     />
@@ -639,7 +644,7 @@ export function ScoreResultCard({
                 </button>
                 <button
                   type="button"
-                  className="rounded-full border border-brand/30 bg-primary-tint px-4 py-2 text-caption font-bold text-[#006D41] hover:border-brand/50"
+                  className="rounded-full border border-brand/30 bg-primary-tint px-4 py-2 text-caption font-bold text-ink-navActive hover:border-brand/50"
                   onClick={async () => {
                     try {
                       if (exportKind === "docx") {
@@ -688,7 +693,7 @@ export function ScoreResultCard({
                   <p id="scoring-strategy-title" className="text-body font-extrabold text-ink">
                     给分策略详情
                   </p>
-                  <p className="mt-1 text-caption font-semibold leading-snug text-[#006D41]">{strategyModel.headline}</p>
+                  <p className="mt-1 text-caption font-semibold leading-snug text-ink-navActive">{strategyModel.headline}</p>
                 </div>
               </div>
               <button
@@ -715,14 +720,14 @@ export function ScoreResultCard({
                           各题按过程分/结果分/规范分折算为 0–10 再换算为百分率，与首页「得分率」一致；不等于「正确题数÷总题数」。
                         </p>
                       </div>
-                      <p className="text-4xl font-black tabular-nums leading-none text-[#006D41] sm:text-[2.75rem]">
+                      <p className="text-4xl font-black tabular-nums leading-none text-ink-navActive sm:text-[2.75rem]">
                         {strategyModel.stats.pct}
                         <span className="text-2xl font-extrabold text-teal-700/90">%</span>
                       </p>
                     </div>
                     <div className="mt-4 h-3 overflow-hidden rounded-full bg-black/[0.07]">
                       <div
-                        className="h-full rounded-full bg-gradient-to-r from-brand via-primary to-emerald-400 shadow-[0_0_12px_rgba(82,196,26,0.35)] transition-[width] duration-500 ease-out"
+                        className="h-full rounded-full bg-gradient-to-r from-[#51c527] via-primary to-[#9ee070] shadow-[0_0_12px_rgba(81,197,39,0.22)] transition-[width] duration-500 ease-out"
                         style={{ width: `${Math.min(100, Math.max(0, strategyModel.stats.pct))}%` }}
                       />
                     </div>
@@ -756,14 +761,14 @@ export function ScoreResultCard({
                   <ul className="mt-5 space-y-3">
                     {(
                       [
-                        { sec: strategyModel.sections[0], Icon: Sparkles, tone: "from-violet-500/15 to-white" },
-                        { sec: strategyModel.sections[1], Icon: BarChart3, tone: "from-sky-500/12 to-white" },
-                        { sec: strategyModel.sections[2], Icon: AlertTriangle, tone: "from-orange-500/12 to-white" },
+                        { sec: strategyModel.sections[0], Icon: Sparkles, tone: STRATEGY_SECTION_GRADIENT },
+                        { sec: strategyModel.sections[1], Icon: BarChart3, tone: STRATEGY_SECTION_GRADIENT },
+                        { sec: strategyModel.sections[2], Icon: AlertTriangle, tone: STRATEGY_SECTION_GRADIENT },
                       ] as const
                     ).map(({ sec, Icon, tone }, idx) => (
                       <li
                         key={sec.key}
-                        className={`rounded-2xl border border-black/[0.06] bg-gradient-to-br ${tone} p-4 shadow-sm ring-1 ring-black/[0.04] sm:p-4`}
+                        className={`rounded-2xl border border-primary/12 bg-gradient-to-br ${tone} p-4 shadow-sm ring-1 ring-primary/8 sm:p-4`}
                       >
                         <div className="flex gap-3">
                           <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white text-primary shadow-sm ring-1 ring-primary/15">
@@ -795,7 +800,7 @@ export function ScoreResultCard({
                   <div className="rounded-2xl border border-primary/15 bg-gradient-to-br from-sky-50/80 via-white to-primary-tint/50 p-4 shadow-inner ring-1 ring-primary/10 sm:p-5">
                     <p className="text-caption font-bold text-ink-muted">综合得分率</p>
                     <div className="mt-2 flex items-end justify-between gap-2">
-                      <p className="text-4xl font-black tabular-nums text-[#006D41]">{strategyModel.pct}%</p>
+                      <p className="text-4xl font-black tabular-nums text-ink-navActive">{strategyModel.pct}%</p>
                     </div>
                     <div className="mt-4 h-3 overflow-hidden rounded-full bg-black/[0.07]">
                       <div
@@ -807,13 +812,13 @@ export function ScoreResultCard({
                   <ul className="mt-5 space-y-3">
                     {(
                       [
-                        { sec: strategyModel.sections[0], Icon: BookOpen },
-                        { sec: strategyModel.sections[1], Icon: ListChecks },
+                        { sec: strategyModel.sections[0], Icon: BookOpen, tone: STRATEGY_SECTION_GRADIENT },
+                        { sec: strategyModel.sections[1], Icon: ListChecks, tone: STRATEGY_SECTION_GRADIENT },
                       ] as const
-                    ).map(({ sec, Icon }, idx) => (
+                    ).map(({ sec, Icon, tone }, idx) => (
                       <li
                         key={sec.key}
-                        className="rounded-2xl border border-black/[0.06] bg-gradient-to-br from-white to-primary-tint/30 p-4 shadow-sm ring-1 ring-primary/8"
+                        className={`rounded-2xl border border-primary/12 bg-gradient-to-br ${tone} p-4 shadow-sm ring-1 ring-primary/8 sm:p-4`}
                       >
                         <div className="flex gap-3">
                           <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white text-primary shadow-sm ring-1 ring-primary/15">
@@ -829,7 +834,7 @@ export function ScoreResultCard({
                             <ul className="mt-3 space-y-2.5">
                               {sec.bullets.map((line, bi) => (
                                 <li key={`${sec.key}-b-${bi}`} className="flex gap-2.5 text-caption leading-relaxed">
-                                  <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-sky-500/80" aria-hidden />
+                                  <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-primary/70" aria-hidden />
                                   <span className="min-w-0 text-ink/90 [text-wrap:pretty]">{line}</span>
                                 </li>
                               ))}
