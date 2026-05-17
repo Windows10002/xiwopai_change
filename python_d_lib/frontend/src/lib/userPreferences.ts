@@ -29,6 +29,8 @@ export type UserPreferences = {
   exportIncludeStrengths: boolean;
   exportIncludeImprovements: boolean;
   exportIncludeWeakTags: boolean;
+  exportIncludeLearningReport: boolean;
+  exportIncludeVariants: boolean;
   /** 毛玻璃面板浓淡：0 更透，100 更实 */
   glassOpacity: number;
 };
@@ -55,6 +57,8 @@ export const DEFAULT_USER_PREFERENCES: UserPreferences = {
   exportIncludeStrengths: true,
   exportIncludeImprovements: true,
   exportIncludeWeakTags: true,
+  exportIncludeLearningReport: true,
+  exportIncludeVariants: true,
   glassOpacity: GLASS_OPACITY_DEFAULT,
 };
 
@@ -93,6 +97,8 @@ function normalizePartial(o: Partial<UserPreferences> | Record<string, unknown>)
     exportIncludeStrengths: o.exportIncludeStrengths !== false,
     exportIncludeImprovements: o.exportIncludeImprovements !== false,
     exportIncludeWeakTags: o.exportIncludeWeakTags !== false,
+    exportIncludeLearningReport: o.exportIncludeLearningReport !== false,
+    exportIncludeVariants: o.exportIncludeVariants !== false,
     glassOpacity: clampGlassOpacity(Number(o.glassOpacity ?? d.glassOpacity)),
   };
 }
@@ -158,5 +164,7 @@ export function exportFilterFromPreferences(p?: UserPreferences): ExportFilterOp
     includeStrengths: prefs.exportIncludeStrengths,
     includeImprovements: prefs.exportIncludeImprovements,
     includeWeakTags: prefs.exportIncludeWeakTags,
+    includeLearningReport: prefs.exportIncludeLearningReport,
+    includeVariants: prefs.exportIncludeVariants,
   };
 }

@@ -8,6 +8,7 @@ import type { BatchInsightsResponse } from "@/lib/gradingBatchInsights";
 import {
   aggregateBatchLocally,
   buildBatchInsightItems,
+  buildRuleKnowledgeVariants,
   fetchBatchInsights,
 } from "@/lib/gradingBatchInsights";
 import type { GradingResultDetail } from "@/types/grading";
@@ -21,6 +22,8 @@ type BatchInsightsModalProps = {
   gradeLevel?: string;
   teacherNote?: string;
   groupName?: string;
+  /** 分析完成后回传，供导出 Word/Excel 使用 */
+  onInsightsData?: (data: BatchInsightsResponse) => void;
 };
 
 type TabId = "report" | "variants";
@@ -44,6 +47,7 @@ export function BatchInsightsModal({
   gradeLevel,
   teacherNote,
   groupName,
+  onInsightsData,
 }: BatchInsightsModalProps) {
   const [tab, setTab] = useState<TabId>("report");
   const [loading, setLoading] = useState(false);
@@ -52,6 +56,7 @@ export function BatchInsightsModal({
   const [copied, setCopied] = useState(false);
 
   const canAnalyze = entries.length > 0;
+  const isSinglePaper = entries.length === 1;
 
   const runAnalysis = useCallback(
     async (useLlm: boolean) => {
@@ -69,27 +74,22 @@ export function BatchInsightsModal({
             groupName,
           });
           setData(res);
+          onInsightsData?.(res);
         } else {
           const local = aggregateBatchLocally(subject, entries);
-          setData({
+          const payload: BatchInsightsResponse = {
             ok: true,
             ...local,
-            knowledge_variants: {
-              intro: "本地汇总未生成变式题，请使用「AI 深度分析」。",
-              knowledge_summary: (local.stats?.weak_knowledge_ranked ?? []).map((w) => ({
-                name: w.tag,
-                frequency: w.count,
-                mastery_hint: w.count >= 2 ? "需巩固" : "偶发",
-              })),
-              variant_problems: [],
-            },
-          });
+            knowledge_variants: buildRuleKnowledgeVariants(subject, local),
+          };
+          setData(payload);
+          onInsightsData?.(payload);
         }
         setTab("report");
       } catch (e) {
         const msg = e instanceof Error ? e.message : "分析失败";
         const local = aggregateBatchLocally(subject, entries);
-        setData({
+        const payload: BatchInsightsResponse = {
           ok: true,
           ...local,
           knowledge_variants: {
@@ -97,14 +97,16 @@ export function BatchInsightsModal({
             knowledge_summary: [],
             variant_problems: [],
           },
-        });
+        };
+        setData(payload);
+        onInsightsData?.(payload);
         setError(`${msg} · 已展示本地汇总`);
         setTab("report");
       } finally {
         setLoading(false);
       }
     },
-    [canAnalyze, subject, entries, gradeLevel, teacherNote, groupName],
+    [canAnalyze, subject, entries, gradeLevel, teacherNote, groupName, onInsightsData],
   );
 
   const reportText = useMemo(() => data?.learning_report?.summary_md ?? "", [data]);
@@ -141,8 +143,12 @@ export function BatchInsightsModal({
     <AppDialog
       open={open}
       onClose={onClose}
-      title="批量学情分析"
-      subtitle={`${subjectLabel} · ${entries.length} 份已批改${groupName ? ` · ${groupName}` : ""}`}
+      title={isSinglePaper ? "学情分析与变式题" : "批量学情分析"}
+      subtitle={
+        isSinglePaper
+          ? `${subjectLabel} · 本份作业${groupName ? ` · ${groupName}` : ""}`
+          : `${subjectLabel} · ${entries.length} 份已批改${groupName ? ` · ${groupName}` : ""}`
+      }
       size="lg"
       zIndex={110}
       closeDisabled={loading}
@@ -168,7 +174,15 @@ export function BatchInsightsModal({
       {!data ? (
         <div className="space-y-4">
           <p className="text-small leading-relaxed text-ink-muted">
-            汇总本批 <strong className="text-ink">{entries.length}</strong> 份作业的错题模式与薄弱知识点，并整理未来可练的变形题。
+            {isSinglePaper ? (
+              <>
+                根据<strong className="text-ink">本份</strong>批改结果归纳错题模式与薄弱知识点，并生成可练的变形题建议。
+              </>
+            ) : (
+              <>
+                汇总本批 <strong className="text-ink">{entries.length}</strong> 份作业的错题模式与薄弱知识点，并整理未来可练的变形题。
+              </>
+            )}
           </p>
           <div className="flex flex-col gap-2 sm:flex-row">
             <button

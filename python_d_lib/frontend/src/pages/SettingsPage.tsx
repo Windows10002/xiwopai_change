@@ -284,6 +284,18 @@ export function SettingsPage() {
               checked={prefs.exportIncludeWeakTags}
               onChange={(v) => applyPrefs({ exportIncludeWeakTags: v })}
             />
+            <PrefToggle
+              label="导出学情分析报告"
+              hint="单张或批量批改均可写入 Word/Excel（可先运行学情分析，或导出时自动本地汇总）。"
+              checked={prefs.exportIncludeLearningReport}
+              onChange={(v) => applyPrefs({ exportIncludeLearningReport: v })}
+            />
+            <PrefToggle
+              label="导出变形题建议"
+              hint="写入知识点归纳与变形题；单张批改同样支持，建议先运行 AI 深度分析以获得更具体题干。"
+              checked={prefs.exportIncludeVariants}
+              onChange={(v) => applyPrefs({ exportIncludeVariants: v })}
+            />
           </PrefSection>
 
           <button

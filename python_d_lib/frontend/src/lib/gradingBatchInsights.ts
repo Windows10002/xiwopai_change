@@ -56,6 +56,76 @@ function isErrorDimension(subject: "math" | "english", status?: string): boolean
   return status === "错误" || status === "未作答";
 }
 
+/** 从当前批改结果构造学情分析条目（单张 / 历史 / 无文件列表时） */
+export function buildInsightEntriesFromResult(
+  result: GradingResultDetail,
+  fileName: string,
+): Array<{ fileName: string; detail: GradingResultDetail }> {
+  const name = fileName.trim() || "本份作业";
+  return [{ fileName: name, detail: result }];
+}
+
+/** 规则生成变形题（单份或批量本地汇总，无 LLM） */
+export function buildRuleKnowledgeVariants(
+  subject: "math" | "english",
+  local: Pick<BatchInsightsResponse, "stats" | "learning_report">,
+): NonNullable<BatchInsightsResponse["knowledge_variants"]> {
+  const weak = local.stats?.weak_knowledge_ranked ?? [];
+  const patterns = local.stats?.error_patterns ?? [];
+  const paperCount = local.stats?.paper_count ?? 1;
+  const isSingle = paperCount === 1;
+
+  const knowledge_summary = weak.map((w) => ({
+    name: w.tag,
+    frequency: w.count,
+    mastery_hint: w.count >= 2 ? "需巩固" : isSingle ? "本卷薄弱" : "偶发",
+    typical_errors: [] as string[],
+  }));
+
+  const variant_problems: NonNullable<BatchInsightsResponse["knowledge_variants"]>["variant_problems"] = [];
+  const seen = new Set<string>();
+
+  const pushVariant = (knowledge_point: string, variation_type: string, stem: string) => {
+    const key = knowledge_point.slice(0, 40);
+    if (seen.has(key)) return;
+    seen.add(key);
+    variant_problems.push({
+      knowledge_point,
+      difficulty: isSingle ? "中等" : "中等",
+      variation_type,
+      stem,
+      answer_hint: isSingle
+        ? "对照本卷错题订正要点与课堂讲解完成。"
+        : "对照本批错题中的正确步骤与订正要点完成。",
+    });
+  };
+
+  for (const w of weak.slice(0, isSingle ? 4 : 6)) {
+    const stem =
+      subject === "math"
+        ? `围绕「${w.tag}」出一道计算/应用练习（难度适中，可课堂手写补充数值）。`
+        : `围绕「${w.tag}」写一句符合语境的${subject === "english" ? "英语" : ""}表达。`;
+    pushVariant(w.tag, subject === "math" ? "数值变式" : "句型变式", stem);
+  }
+
+  for (const p of patterns) {
+    if (variant_problems.length >= (isSingle ? 4 : 8)) break;
+    const label = p.pattern.includes("·") ? p.pattern.split("·").slice(1).join("·").trim() : p.pattern;
+    const kp = label || p.pattern;
+    pushVariant(
+      kp.slice(0, 48),
+      subject === "math" ? "纠错变式" : "表达变式",
+      `针对「${kp}」类错题，设计一题巩固练习（${p.count > 1 ? `本批出现 ${p.count} 次` : "本卷出现"}）。`,
+    );
+  }
+
+  const intro = isSingle
+    ? "基于本份作业的错题与薄弱点整理的变形题建议；运行「AI 深度分析」可获得更具体的题干。"
+    : `本批（${paperCount} 份）知识点与变形题建议；完整题干可运行 AI 深度分析。`;
+
+  return { intro, knowledge_summary, variant_problems };
+}
+
 /** 将前端批改结果转为批量学情 API 入参 */
 export function buildBatchInsightItems(
   subject: "math" | "english",
@@ -120,10 +190,13 @@ export function aggregateBatchLocally(
     suggestions.push(`重点关注：${error_patterns[0].pattern}。`);
   }
 
+  const isSingle = entries.length === 1;
+  const scopeLabel = isSingle ? "本份作业" : `本批 ${entries.length} 份`;
+
   const summary_md = [
-    "## 学情分析报告（本地汇总）",
+    isSingle ? "## 学情分析报告（本份作业 · 本地汇总）" : "## 学情分析报告（本地汇总）",
     "",
-    `- 份数：${entries.length}`,
+    isSingle ? `- 范围：${scopeLabel}` : `- 份数：${entries.length}`,
     avg != null ? `- 平均得分率：${avg}%` : "",
     "",
     "### 薄弱知识点",
@@ -150,6 +223,40 @@ export function aggregateBatchLocally(
       weak_knowledge_ranked,
       teaching_suggestions: suggestions,
     },
+  };
+}
+
+/** 导出时解析学情数据：优先缓存，否则本地快速汇总 */
+export function resolveBatchInsightsForExport(
+  subject: "math" | "english",
+  entries: Array<{ fileName: string; detail: GradingResultDetail }>,
+  cached: BatchInsightsResponse | null,
+  needLearning: boolean,
+  needVariants: boolean,
+): BatchInsightsResponse | null {
+  if (!needLearning && !needVariants) return null;
+  if (cached?.learning_report || (cached?.knowledge_variants?.variant_problems?.length ?? 0) > 0) {
+    if (needVariants && !(cached.knowledge_variants?.variant_problems?.length) && entries.length > 0) {
+      const local = aggregateBatchLocally(subject, entries);
+      return {
+        ...cached,
+        ok: true,
+        knowledge_variants: buildRuleKnowledgeVariants(subject, local),
+      };
+    }
+    return cached;
+  }
+  if (entries.length === 0) return null;
+  const local = aggregateBatchLocally(subject, entries);
+  const cachedVariants = cached?.knowledge_variants;
+  const hasCachedVariants = (cachedVariants?.variant_problems?.length ?? 0) > 0;
+  return {
+    ok: true,
+    ...local,
+    knowledge_variants:
+      needVariants && hasCachedVariants
+        ? cachedVariants
+        : buildRuleKnowledgeVariants(subject, local),
   };
 }
 

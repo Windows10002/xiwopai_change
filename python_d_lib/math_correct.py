@@ -30,7 +30,9 @@ init(autoreset=True)
 logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(message)s')
 
 # ================= 2. 配置区 =================
-dashscope.api_key = os.getenv("DASHSCOPE_API_KEY", "sk-5d1b92362694429f81c2eb03d6988e3e")
+from dashscope_config import configure_dashscope, set_last_api_error
+
+configure_dashscope()
 MATH_FOLDER = "img_math"
 OUTPUT_EXCEL = "数学作业批改报告.xlsx"
 OUTPUT_TXT = "数学作业批改报告.txt"
@@ -978,6 +980,9 @@ def _teacher_context_suffix_math(grade_level: str, teacher_note: str) -> str:
 
 
 def call_ai_math(image_path: str, *, grade_level: str = "", teacher_note: str = "") -> dict:
+    if not configure_dashscope():
+        logging.error("未配置 DASHSCOPE_API_KEY，跳过 AI 批改")
+        return None
     try:
         with open(image_path, "rb") as f:
             b64 = base64.b64encode(f.read()).decode()
@@ -1001,10 +1006,13 @@ def call_ai_math(image_path: str, *, grade_level: str = "", teacher_note: str = 
         if resp.status_code == HTTPStatus.OK:
             raw = resp.output.choices[0].message.content[0]["text"]
             return normalize_math_result(json.loads(extract_json_safe(raw)))
-        logging.error(f"API 失败：{resp.status_code} | {resp.message}")
+        msg = f"API 失败：{resp.status_code} | {resp.message}"
+        logging.error(msg)
+        set_last_api_error(msg)
         return None
     except Exception as e:
         logging.error(f"处理异常：{e}")
+        set_last_api_error(str(e))
         return None
 
 

@@ -25,8 +25,9 @@ export default defineConfig({
   },
   server: {
     proxy: {
-      "/api": { target: "http://127.0.0.1:5001", changeOrigin: true },
-      "/uploads": { target: "http://127.0.0.1:5001", changeOrigin: true },
+      /* 与 app.py 默认 PORT=5005 一致；若用 PORT=5001 启动后端请改此处 */
+      "/api": { target: "http://127.0.0.1:5005", changeOrigin: true },
+      "/uploads": { target: "http://127.0.0.1:5005", changeOrigin: true },
     },
   },
 });

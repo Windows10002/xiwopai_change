@@ -18,7 +18,9 @@ from colorama import init, Fore, Style
 init(autoreset=True)
 
 # 请替换为你的有效 API Key，或设置环境变量 DASHSCOPE_API_KEY
-dashscope.api_key = os.getenv("DASHSCOPE_API_KEY", "sk-5d1b92362694429f81c2eb03d6988e3e")
+from dashscope_config import configure_dashscope
+
+configure_dashscope()
 
 ENG_FOLDER = "img_english"
 OUTPUT_EXCEL = "希沃智教_英语作文深度批改报告.xlsx"

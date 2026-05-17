@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { CheckCircle2, MessageSquareWarning, XCircle } from "lucide-react";
 
 import { CUTE_ICON } from "@/components/atoms/cuteIcon";
@@ -186,7 +187,7 @@ export function TeacherGradingDisputePanel() {
 }
 
 const TOOLBAR_BTN_CLASS =
-  "inline-flex min-h-9 items-center gap-1.5 rounded-xl bg-amber-50/95 px-3 py-1.5 text-caption font-bold text-amber-950 shadow-sm ring-1 ring-amber-200/80 transition hover:bg-amber-100/90 hover:ring-amber-300/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/50 focus-visible:ring-offset-2 focus-visible:ring-offset-white";
+  "relative inline-flex min-h-9 items-center gap-1.5 rounded-xl bg-amber-50/95 px-3 py-1.5 text-caption font-bold text-amber-950 shadow-sm ring-1 ring-amber-200/80 transition hover:bg-amber-100/90 hover:ring-amber-300/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/50 focus-visible:ring-offset-2 focus-visible:ring-offset-white";
 
 /** 批改页顶栏：打开学生申诉侧栏（仅教师） */
 export function TeacherGradingDisputeToolbarButton() {
@@ -223,7 +224,7 @@ export function TeacherGradingDisputeToolbarButton() {
         <MessageSquareWarning className="h-4 w-4 shrink-0 text-amber-700" {...CUTE_ICON} aria-hidden />
         学生申诉
         {pendingCount > 0 ? (
-          <span className="inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-amber-600 px-1 text-[0.62rem] font-black leading-none text-white">
+          <span className="absolute -right-1.5 -top-1.5 inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-amber-600 px-1 text-[0.62rem] font-black leading-none text-white ring-2 ring-white">
             {pendingCount > 99 ? "99+" : pendingCount}
           </span>
         ) : null}
@@ -249,15 +250,15 @@ function TeacherGradingDisputeDrawer({
   onClose: () => void;
   onPendingCountChange: (n: number) => void;
 }) {
-  return (
+  return createPortal(
     <div
-      className="fixed inset-0 z-[90] flex justify-end bg-black/35 backdrop-blur-[1px]"
+      className="fixed inset-0 z-[130] flex justify-end bg-black/40 backdrop-blur-[2px]"
       role="dialog"
       aria-modal="true"
       aria-label="学生判题申诉"
     >
-      <button type="button" className="absolute inset-0" aria-label="关闭申诉面板" onClick={onClose} />
-      <aside className="relative z-10 flex h-full w-full max-w-md flex-col border-l border-black/[0.08] bg-white shadow-2xl">
+      <button type="button" className="absolute inset-0 cursor-default" aria-label="关闭申诉面板" onClick={onClose} />
+      <aside className="relative z-10 flex h-full min-h-0 w-full max-w-md flex-col border-l border-black/[0.08] bg-white shadow-2xl">
         <div className="flex flex-wrap items-start justify-between gap-3 border-b border-black/[0.06] bg-gradient-to-r from-amber-50/80 via-white to-primary-tint/30 px-4 py-4">
           <div className="min-w-0">
             <p className="flex items-center gap-2 text-body font-extrabold text-ink">
@@ -276,11 +277,12 @@ function TeacherGradingDisputeDrawer({
             关闭
           </button>
         </div>
-        <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4">
           <TeacherGradingDisputePanelBody onPendingCountChange={onPendingCountChange} />
         </div>
       </aside>
-    </div>
+    </div>,
+    document.body,
   );
 }
 
@@ -294,7 +296,7 @@ function TeacherDisputeLists({
   onReviewed: () => void;
 }) {
   return (
-    <div className="mt-5 space-y-6">
+    <div className="space-y-6">
       <div>
         <h3 className="text-small font-bold text-ink">待处理（{pending.length}）</h3>
         {pending.length === 0 ? (

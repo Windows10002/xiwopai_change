@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { BarChart3, BookOpen, Calculator, Eraser } from "lucide-react";
+import { BookOpen, Calculator, Eraser } from "lucide-react";
 import { HistoryDropdown } from "@/components/atoms/Navbar";
 import { PrimaryButton } from "@/components/atoms/PrimaryButton";
 import { Breadcrumb, type BreadcrumbItem } from "@/components/atoms/Breadcrumb";
@@ -30,6 +30,7 @@ import { clearGradingLiveDraft, loadGradingLiveDraft, saveGradingLiveDraft } fro
 import { deleteHistoryImageBlob, getHistoryImageBlob, putHistoryImageBlob } from "@/lib/gradingHistoryImageDb";
 import { fileToJpegBlobForStorage, fileToJpegThumbDataUrl } from "@/lib/imageThumb";
 import { GlassOpacityControl } from "@/components/molecules/GlassOpacityControl";
+import type { BatchInsightsResponse } from "@/lib/gradingBatchInsights";
 import { saveUserPreferences } from "@/lib/userPreferences";
 import { useUserPreferences } from "@/hooks/useUserPreferences";
 import { CUTE_ICON } from "@/components/atoms/cuteIcon";
@@ -97,6 +98,9 @@ export function GradingWorkspace({
   const isTeacher = session?.role === "teacher";
   const [helpOpen, setHelpOpen] = useState(false);
   const [batchInsightsOpen, setBatchInsightsOpen] = useState(false);
+  const [cachedBatchInsights, setCachedBatchInsights] = useState<BatchInsightsResponse | null>(null);
+  /** 无本地文件列表时（历史/草稿）用于学情与导出的显示名 */
+  const [insightFileName, setInsightFileName] = useState("");
   const [historyOpen, setHistoryOpen] = useState(false);
   const [historyItems, setHistoryItems] = useState<GradingHistoryEntry[]>(() => loadGradingHistory());
   const [contextModalOpen, setContextModalOpen] = useState(false);
@@ -159,6 +163,8 @@ export function GradingWorkspace({
       const d = loadGradingLiveDraft(subject);
       if (!d?.detail) return;
       setResult(d.detail);
+      setInsightFileName(d.fileName?.trim() ?? "");
+      setCachedBatchInsights(null);
       const s = d.step;
       setStep(s >= 1 && s <= 3 ? s : 3);
 
@@ -246,6 +252,8 @@ export function GradingWorkspace({
     setCurrentFileIndex(0);
     setGradingProgress({ done: 0, total: 0 });
     setResult(null);
+    setInsightFileName("");
+    setCachedBatchInsights(null);
     setStep(1);
     setIsGrading(false);
     setUploadStatus({ phase: "info", message: "已清空当前页内容，可重新上传作业。" });
@@ -300,6 +308,8 @@ export function GradingWorkspace({
       previewUrlRef.current = url;
       setPreviewUrl(url);
       setResult(null);
+      setInsightFileName(imageFiles.length === 1 ? imageFiles[0]!.name : "");
+      setCachedBatchInsights(null);
       setStep(1);
       setIsGrading(false);
       setUploadStatus(imageFiles.length > 1 ? { phase: "info", message: `已从文件夹中识别 ${imageFiles.length} 张图片` } : { phase: "idle" });
@@ -357,6 +367,7 @@ export function GradingWorkspace({
     setResult(null);
     setBatchResults(Array.from({ length: files.length }, () => null));
     setBatchErrors(Array.from({ length: files.length }, () => null));
+    setCachedBatchInsights(null);
     setGradingProgress({ done: 0, total: files.length });
     setStep(2);
     setIsGrading(true);
@@ -526,6 +537,8 @@ export function GradingWorkspace({
       setCurrentFileIndex(0);
       setGradingProgress({ done: 0, total: 0 });
       setResult(entry.detail);
+      setInsightFileName(entry.fileName);
+      setCachedBatchInsights(null);
       setStep(3);
       setPreviewUrl(null);
       void (async () => {
@@ -613,25 +626,32 @@ export function GradingWorkspace({
 
   const batchInsightEntries = useMemo(() => {
     const out: Array<{ fileName: string; detail: GradingResultDetail }> = [];
-    if (selectedFiles.length > 0 && batchResults.length > 0) {
+    if (result && selectedFiles.length === 1) {
+      return [{ fileName: selectedFiles[0]!.name, detail: result }];
+    }
+    if (selectedFiles.length > 1 && batchResults.length > 0) {
       selectedFiles.forEach((file, index) => {
         const detail = batchResults[index];
         if (detail) out.push({ fileName: file.name, detail });
       });
       return out;
     }
-    if (result && selectedFiles.length === 1) {
-      out.push({ fileName: selectedFiles[0]!.name, detail: result });
-    } else if (result && selectedFiles.length === 0) {
-      out.push({ fileName: exportBaseName, detail: result });
+    if (result && selectedFiles.length === 0) {
+      out.push({ fileName: insightFileName.trim() || exportBaseName, detail: result });
     }
     return out;
-  }, [selectedFiles, batchResults, result, exportBaseName]);
+  }, [selectedFiles, batchResults, result, exportBaseName, insightFileName]);
 
-  const batchInsightGroupName = useMemo(
-    () => deriveBatchFolderLabel(selectedFiles) ?? (selectedFiles.length > 1 ? `本批 ${selectedFiles.length} 张` : undefined),
-    [selectedFiles],
-  );
+  const batchInsightGroupName = useMemo(() => {
+    if (selectedFiles.length > 1) {
+      return deriveBatchFolderLabel(selectedFiles) ?? `本批 ${selectedFiles.length} 张`;
+    }
+    if (selectedFiles.length === 1) {
+      return selectedFiles[0]!.name.replace(/\.[^/.]+$/, "") || "本份作业";
+    }
+    if (insightFileName.trim()) return insightFileName.trim().replace(/\.[^/.]+$/, "");
+    return undefined;
+  }, [selectedFiles, insightFileName]);
 
   /** 写入反馈 JSONL：当前卷服务端路径、本地历史 id、批次与文件名 */
   const gradingFeedbackTrace = useMemo((): GradingFeedbackTrace => {
@@ -752,7 +772,7 @@ export function GradingWorkspace({
                 <Breadcrumb items={breadcrumbItems} variant="embedded" contentMaxClassName="max-w-none" />
               </div>
             </div>
-            <div className="mt-3 flex shrink-0 flex-wrap items-center justify-end gap-2 border-t border-black/[0.06] pt-3 md:mt-0 md:border-t-0 md:pt-0">
+            <div className="relative z-[80] mt-3 flex shrink-0 flex-wrap items-center justify-end gap-2 border-t border-black/[0.06] pt-3 md:mt-0 md:border-t-0 md:pt-0">
               <GlassOpacityControl
                 compact
                 value={prefs.glassOpacity}
@@ -827,16 +847,6 @@ export function GradingWorkspace({
                             共 {selectedFiles.length} 张 · 成功 {batchSuccessCount} · 失败 {batchFailCount}。点击下方行切换左侧原图与右侧得分。
                           </p>
                         </div>
-                        {batchSuccessCount > 0 ? (
-                          <button
-                            type="button"
-                            onClick={() => setBatchInsightsOpen(true)}
-                            className="inline-flex shrink-0 items-center gap-2 rounded-xl border border-white/45 bg-white/50 px-3 py-2 text-caption font-bold text-[#006D41] shadow-sm backdrop-blur-sm transition hover:bg-white/65"
-                          >
-                            <BarChart3 className="h-4 w-4" {...CUTE_ICON} aria-hidden />
-                            学情分析
-                          </button>
-                        ) : null}
                       </div>
                       <ul className="mt-3 max-h-[min(40vh,16rem)] space-y-1.5 overflow-y-auto overscroll-contain">
                         {selectedFiles.map((file, index) => {
@@ -903,18 +913,6 @@ export function GradingWorkspace({
                 ) : null}
               </div>
               <div className="flex min-h-0 min-w-0 flex-col md:h-full md:min-h-[min(100%,28rem)]">
-                {batchInsightEntries.length > 0 && !isGrading && selectedFiles.length <= 1 ? (
-                  <div className="mb-3 flex justify-end">
-                    <button
-                      type="button"
-                      onClick={() => setBatchInsightsOpen(true)}
-                      className="inline-flex items-center gap-2 rounded-xl border border-white/45 bg-white/50 px-3 py-2 text-caption font-bold text-[#006D41] shadow-sm backdrop-blur-sm transition hover:bg-white/65"
-                    >
-                      <BarChart3 className="h-4 w-4" {...CUTE_ICON} aria-hidden />
-                      学情分析与变式题
-                    </button>
-                  </div>
-                ) : null}
                 <ScoreResultCard
                   subject={subject}
                   result={result}
@@ -923,6 +921,9 @@ export function GradingWorkspace({
                   exportBaseName={exportBaseName}
                   gradingFeedbackTrace={gradingFeedbackTrace}
                   onDimensionUpdate={applyDimensionUpdate}
+                  batchInsightEntries={batchInsightEntries}
+                  cachedBatchInsights={cachedBatchInsights}
+                  onOpenBatchInsights={() => setBatchInsightsOpen(true)}
                 />
               </div>
             </div>
@@ -940,6 +941,7 @@ export function GradingWorkspace({
         gradeLevel={teacherGradeLevel}
         teacherNote={teacherNote}
         groupName={batchInsightGroupName}
+        onInsightsData={setCachedBatchInsights}
       />
       <AiHelpModal open={helpOpen} onClose={() => setHelpOpen(false)} />
       <GradingContextModal

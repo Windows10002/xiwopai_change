@@ -1,5 +1,6 @@
 import ExcelJS from "exceljs";
 import { Document, HeadingLevel, Packer, Paragraph, TextRun, AlignmentType } from "docx";
+import type { BatchInsightsResponse } from "@/lib/gradingBatchInsights";
 import type { DimensionScore, GradingResultDetail } from "@/types/grading";
 
 /** 导出前筛选：分项列表 */
@@ -12,6 +13,10 @@ export type ExportFilterOptions = {
   includeStrengths: boolean;
   includeImprovements: boolean;
   includeWeakTags: boolean;
+  /** 批量学情分析报告（需已生成或导出时自动本地汇总） */
+  includeLearningReport: boolean;
+  /** 知识点归纳与变形题建议 */
+  includeVariants: boolean;
 };
 
 export const DEFAULT_EXPORT_FILTER: ExportFilterOptions = {
@@ -20,7 +25,110 @@ export const DEFAULT_EXPORT_FILTER: ExportFilterOptions = {
   includeStrengths: true,
   includeImprovements: true,
   includeWeakTags: true,
+  includeLearningReport: true,
+  includeVariants: true,
 };
+
+function appendInsightsDocx(children: Paragraph[], insights: BatchInsightsResponse, filter: ExportFilterOptions) {
+  const report = insights.learning_report;
+  const variants = insights.knowledge_variants;
+
+  if (filter.includeLearningReport && report) {
+    children.push(
+      new Paragraph({ text: "学情分析报告", heading: HeadingLevel.HEADING_1, spacing: { before: 360, after: 160 } }),
+    );
+    if (report.summary_md) {
+      report.summary_md.split(/\n+/).forEach((line) => {
+        const t = line.replace(/^#+\s*/, "").trim();
+        if (!t) return;
+        if (line.startsWith("###")) {
+          children.push(new Paragraph({ text: t, heading: HeadingLevel.HEADING_3, spacing: { before: 120, after: 80 } }));
+        } else if (line.startsWith("##")) {
+          children.push(new Paragraph({ text: t, heading: HeadingLevel.HEADING_2, spacing: { before: 160, after: 100 } }));
+        } else {
+          children.push(new Paragraph({ text: t, spacing: { after: 80 } }));
+        }
+      });
+    }
+    (report.teaching_suggestions ?? []).forEach((s, i) => {
+      children.push(new Paragraph({ text: `${i + 1}. ${s}`, spacing: { after: 60 } }));
+    });
+  }
+
+  if (filter.includeVariants && variants) {
+    children.push(
+      new Paragraph({ text: "知识点与变形题", heading: HeadingLevel.HEADING_1, spacing: { before: 360, after: 160 } }),
+    );
+    if (variants.intro) {
+      children.push(new Paragraph({ text: variants.intro, spacing: { after: 120 } }));
+    }
+    (variants.knowledge_summary ?? []).forEach((k) => {
+      children.push(
+        new Paragraph({
+          text: `${k.name}（出现 ${k.frequency} 次${k.mastery_hint ? ` · ${k.mastery_hint}` : ""}）`,
+          spacing: { after: 60 },
+        }),
+      );
+    });
+    (variants.variant_problems ?? []).forEach((v, i) => {
+      children.push(
+        new Paragraph({
+          text: `${i + 1}. 【${v.knowledge_point}】${v.difficulty} · ${v.variation_type}`,
+          spacing: { before: 100, after: 40 },
+        }),
+        new Paragraph({ text: v.stem, spacing: { after: 40 } }),
+        new Paragraph({
+          children: [new TextRun({ text: "参考答案要点：", bold: true }), new TextRun(v.answer_hint)],
+          spacing: { after: 100 },
+        }),
+      );
+    });
+  }
+}
+
+function appendInsightsXlsx(wb: ExcelJS.Workbook, insights: BatchInsightsResponse, filter: ExportFilterOptions) {
+  const report = insights.learning_report;
+  const variants = insights.knowledge_variants;
+  if (!filter.includeLearningReport && !filter.includeVariants) return;
+
+  const ws = wb.addWorksheet("学情与变式", { views: [{ state: "frozen", ySplit: 1 }] });
+  ws.columns = [{ width: 10 }, { width: 72 }, { width: 14 }];
+  const head = ws.addRow(["区块", "内容", "备注"]);
+  head.font = { bold: true };
+  head.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFE8F5E9" } };
+
+  if (filter.includeLearningReport && report) {
+    ws.addRow(["学情分析", "", ""]).font = { bold: true };
+    if (report.summary_md) {
+      report.summary_md.split(/\n+/).forEach((line) => {
+        const t = line.trim();
+        if (t) ws.addRow(["", t.replace(/^#+\s*/, ""), ""]);
+      });
+    }
+    (report.weak_knowledge_ranked ?? []).forEach((w) => {
+      ws.addRow(["薄弱点", w.tag, `${w.count} 次`]);
+    });
+    (report.error_patterns ?? []).forEach((p) => {
+      ws.addRow(["错题模式", p.pattern, `${p.count} 次`]);
+    });
+    (report.teaching_suggestions ?? []).forEach((s, i) => {
+      ws.addRow(["教学建议", `${i + 1}. ${s}`, ""]);
+    });
+  }
+
+  if (filter.includeVariants && variants) {
+    ws.addRow(["", "", ""]);
+    ws.addRow(["变形题", "", ""]).font = { bold: true };
+    if (variants.intro) ws.addRow(["说明", variants.intro, ""]);
+    (variants.knowledge_summary ?? []).forEach((k) => {
+      ws.addRow(["知识点", k.name, `${k.frequency} 次 · ${k.mastery_hint ?? ""}`]);
+    });
+    (variants.variant_problems ?? []).forEach((v, i) => {
+      ws.addRow([`变式 ${i + 1}`, v.stem, `${v.knowledge_point} · ${v.difficulty}`]);
+      ws.addRow(["", `答案要点：${v.answer_hint}`, v.variation_type]);
+    });
+  }
+}
 
 function filterDimensionsForExport(
   dimensions: DimensionScore[],
@@ -67,6 +175,7 @@ export async function exportGradingDocx(
   subjectCn: string,
   baseName: string,
   filter: ExportFilterOptions = DEFAULT_EXPORT_FILTER,
+  batchInsights: BatchInsightsResponse | null = null,
 ): Promise<void> {
   const safe = baseName.trim().replace(/[\\/:*?"<>|]/g, "_").slice(0, 80) || "作业批改";
   const dims = filterDimensionsForExport(detail.dimensions, filter.dimensions);
@@ -159,6 +268,10 @@ export async function exportGradingDocx(
     })
   );
 
+  if (batchInsights && (filter.includeLearningReport || filter.includeVariants)) {
+    appendInsightsDocx(children, batchInsights, filter);
+  }
+
   const doc = new Document({
     sections: [{ children }],
   });
@@ -173,6 +286,7 @@ export async function exportGradingXlsx(
   subjectCn: string,
   baseName: string,
   filter: ExportFilterOptions = DEFAULT_EXPORT_FILTER,
+  batchInsights: BatchInsightsResponse | null = null,
 ): Promise<void> {
   const safe = baseName.trim().replace(/[\\/:*?"<>|]/g, "_").slice(0, 80) || "作业批改";
   const dims = filterDimensionsForExport(detail.dimensions, filter.dimensions);
@@ -229,6 +343,10 @@ export async function exportGradingXlsx(
     "",
     "",
   ]);
+
+  if (batchInsights && (filter.includeLearningReport || filter.includeVariants)) {
+    appendInsightsXlsx(wb, batchInsights, filter);
+  }
 
   const buf = await wb.xlsx.writeBuffer();
   const blob = new Blob([buf], {

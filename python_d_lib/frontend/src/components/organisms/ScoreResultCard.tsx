@@ -1,5 +1,17 @@
 import { useEffect, useMemo, useState } from "react";
-import { CheckCircle2, FileSpreadsheet, FileText, Lightbulb, ListChecks, Sparkles, BarChart3, AlertTriangle, BookOpen, Scale, MessageSquareWarning, MessagesSquare } from "lucide-react";
+import {
+  CheckCircle2,
+  Download,
+  Lightbulb,
+  ListChecks,
+  Sparkles,
+  BarChart3,
+  AlertTriangle,
+  BookOpen,
+  Scale,
+  MessageSquareWarning,
+  MessagesSquare,
+} from "lucide-react";
 
 import { CUTE_ICON } from "@/components/atoms/cuteIcon";
 import { buildScoringStrategyModel, type ScoringStrategyModel } from "@/lib/scoringStrategyText";
@@ -18,6 +30,11 @@ import { DimensionScoreBars } from "@/components/molecules/DimensionScoreBars";
 import { ScoreResultHero } from "@/components/molecules/ScoreResultHero";
 import { MathPrettyText } from "@/components/atoms/MathPrettyText";
 import { exportGradingDocx, exportGradingXlsx, type ExportFilterOptions } from "@/lib/exportGrading";
+import type { BatchInsightsResponse } from "@/lib/gradingBatchInsights";
+import {
+  buildInsightEntriesFromResult,
+  resolveBatchInsightsForExport,
+} from "@/lib/gradingBatchInsights";
 import { exportFilterFromPreferences } from "@/lib/userPreferences";
 import { useUserPreferences } from "@/hooks/useUserPreferences";
 import { formatMathImprovementBlock } from "@/lib/gradingAnalysisDisplay";
@@ -37,6 +54,10 @@ type ScoreResultCardProps = {
   gradingFeedbackTrace?: GradingFeedbackTrace;
   /** 教师修正单题得分后回写结果（仅教师逐题反馈） */
   onDimensionUpdate?: (dimensionKey: string, patch: Partial<DimensionScore>) => void;
+  /** 可生成学情/变式题的批改条目（单张或文件夹） */
+  batchInsightEntries?: Array<{ fileName: string; detail: GradingResultDetail }>;
+  cachedBatchInsights?: BatchInsightsResponse | null;
+  onOpenBatchInsights?: () => void;
 };
 
 type InsightTab = "summary" | "strengths" | "improve";
@@ -115,6 +136,9 @@ export function ScoreResultCard({
   exportBaseName,
   gradingFeedbackTrace,
   onDimensionUpdate,
+  batchInsightEntries = [],
+  cachedBatchInsights = null,
+  onOpenBatchInsights,
 }: ScoreResultCardProps) {
   const prefs = useUserPreferences();
   const session = useAppSession();
@@ -123,7 +147,9 @@ export function ScoreResultCard({
   const [insightTab, setInsightTab] = useState<InsightTab>(() => prefs.defaultInsightTab as InsightTab);
   const [strategyOpen, setStrategyOpen] = useState(false);
   const [scaleMaxInput, setScaleMaxInput] = useState("100");
-  const [exportKind, setExportKind] = useState<null | "docx" | "xlsx">(null);
+  const [exportOpen, setExportOpen] = useState(false);
+  const [exportFormats, setExportFormats] = useState({ docx: true, xlsx: true });
+  const [exportBusy, setExportBusy] = useState(false);
   const [exportOpts, setExportOpts] = useState<ExportFilterOptions>(() => exportFilterFromPreferences(prefs));
   const [feedbackUi, setFeedbackUi] = useState<null | { mode: "question"; dim: DimensionScore } | { mode: "whole_paper" }>(
     null,
@@ -133,6 +159,13 @@ export function ScoreResultCard({
   const [feedbackErr, setFeedbackErr] = useState<string | null>(null);
   const [feedbackToast, setFeedbackToast] = useState<string | null>(null);
   const [teacherEditValue, setTeacherEditValue] = useState("");
+
+  /** 学情/导出用条目：优先父级传入；单张批改或无文件列表时用当前 result */
+  const insightEntries = useMemo(() => {
+    if (batchInsightEntries.length > 0) return batchInsightEntries;
+    if (result) return buildInsightEntriesFromResult(result, exportBaseName);
+    return [];
+  }, [batchInsightEntries, result, exportBaseName]);
   const [teacherEditStatus, setTeacherEditStatus] = useState("正确");
 
   const strategyModel = useMemo((): ScoringStrategyModel | null => {
@@ -347,35 +380,30 @@ export function ScoreResultCard({
 
   return (
     <section className="glass-panel relative flex min-h-[320px] flex-1 flex-col rounded-card md:min-h-0 md:h-full">
-      <header className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-black/[0.06] px-5 py-4 md:px-6">
+      <header className="flex shrink-0 flex-col gap-3 border-b border-white/30 px-5 py-4 md:px-6">
         <div>
           <h2 className="text-small font-bold text-ink">批改结果</h2>
           <p className="mt-0.5 text-caption text-ink-muted">图像识别 · 过程性评分</p>
         </div>
         {result && !isGrading ? (
-          <div className="flex shrink-0 flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={() => {
-                setExportOpts(exportFilterFromPreferences(prefs));
-                setExportKind("docx");
-              }}
-              className="inline-flex items-center gap-1.5 rounded-full border border-white/50 bg-white/55 px-3 py-1.5 text-[0.65rem] font-bold text-ink shadow-sm backdrop-blur-sm transition hover:border-primary/35 hover:bg-white/70 hover:text-[#006D41] sm:text-caption"
-            >
-              <FileText className="h-4 w-4 shrink-0" {...CUTE_ICON} aria-hidden />
-              导出 Word
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setExportOpts(exportFilterFromPreferences(prefs));
-                setExportKind("xlsx");
-              }}
-              className="inline-flex items-center gap-1.5 rounded-full border border-white/45 bg-white/40 px-3 py-1.5 text-[0.65rem] font-bold text-[#51c527] shadow-sm backdrop-blur-sm transition hover:border-primary/30 hover:bg-white/55 sm:text-caption"
-            >
-              <FileSpreadsheet className="h-4 w-4 shrink-0" {...CUTE_ICON} aria-hidden />
-              导出 Excel
-            </button>
+          <div className="flex flex-nowrap items-center gap-2 overflow-x-auto overscroll-x-contain pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            {onOpenBatchInsights ? (
+              <button
+                type="button"
+                onClick={onOpenBatchInsights}
+                className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-white/45 bg-white/40 px-3 py-1.5 text-[0.65rem] font-bold text-[#006D41] shadow-sm backdrop-blur-sm transition hover:border-primary/30 hover:bg-white/55 sm:text-caption"
+                title={
+                  cachedBatchInsights
+                    ? "已生成学情，可导出到 Word/Excel"
+                    : insightEntries.length > 1
+                      ? "汇总本批错题模式、薄弱点并生成变形题"
+                      : "分析本份作业错题与薄弱点，并生成变形题"
+                }
+              >
+                <BarChart3 className="h-4 w-4 shrink-0" {...CUTE_ICON} aria-hidden />
+                学情分析与变式题
+              </button>
+            ) : null}
             {prefs.showQuestionFeedback ? (
               <button
                 type="button"
@@ -384,13 +412,25 @@ export function ScoreResultCard({
                   setFeedbackText("");
                   setFeedbackErr(null);
                 }}
-                className="inline-flex items-center gap-1.5 rounded-full border border-white/45 bg-white/40 px-3 py-1.5 text-[0.65rem] font-bold text-amber-950 shadow-sm backdrop-blur-sm transition hover:border-amber-300 hover:bg-amber-50/40 sm:text-caption"
+                className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-white/45 bg-white/40 px-3 py-1.5 text-[0.65rem] font-bold text-amber-950 shadow-sm backdrop-blur-sm transition hover:border-amber-300 hover:bg-amber-50/40 sm:text-caption"
                 title="对整卷批改总体意见、多题系统性误判等，一条说明即可（会附带当前卷截图 id）"
               >
                 <MessagesSquare className="h-4 w-4 shrink-0" {...CUTE_ICON} aria-hidden />
                 整卷反馈
               </button>
             ) : null}
+            <button
+              type="button"
+              onClick={() => {
+                setExportOpts(exportFilterFromPreferences(prefs));
+                setExportFormats({ docx: true, xlsx: true });
+                setExportOpen(true);
+              }}
+              className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-white/50 bg-white/55 px-3 py-1.5 text-[0.65rem] font-bold text-ink shadow-sm backdrop-blur-sm transition hover:border-primary/35 hover:bg-white/70 hover:text-[#006D41] sm:text-caption"
+            >
+              <Download className="h-4 w-4 shrink-0" {...CUTE_ICON} aria-hidden />
+              导出 Word / Excel
+            </button>
           </div>
         ) : null}
       </header>
@@ -567,12 +607,12 @@ export function ScoreResultCard({
         )}
       </div>
 
-      {exportKind && result ? (
+      {exportOpen && result ? (
         <AppDialog
           open
-          onClose={() => setExportKind(null)}
-          title={exportKind === "docx" ? "导出 Word" : "导出 Excel"}
-          subtitle="选择导出范围与要写入文件的附加内容"
+          onClose={() => setExportOpen(false)}
+          title="导出批改结果"
+          subtitle="可多选 Word / Excel 格式，并勾选要写入文件的附加内容"
           titleId="export-dialog-title"
           backdropLabel="关闭导出"
           footer={
@@ -580,33 +620,85 @@ export function ScoreResultCard({
               <button
                 type="button"
                 className="inline-flex min-h-10 items-center justify-center rounded-xl border border-black/[0.1] bg-white px-4 text-small font-bold text-ink-muted transition hover:bg-black/[0.04]"
-                onClick={() => setExportKind(null)}
+                onClick={() => setExportOpen(false)}
               >
                 取消
               </button>
               <button
                 type="button"
-                className="btn-brand-primary min-h-10 px-6 text-small"
+                disabled={exportBusy || (!exportFormats.docx && !exportFormats.xlsx)}
+                className="btn-brand-primary min-h-10 px-6 text-small disabled:opacity-60"
                 onClick={async () => {
+                  if (!exportFormats.docx && !exportFormats.xlsx) {
+                    window.alert("请至少选择一种导出格式。");
+                    return;
+                  }
+                  setExportBusy(true);
                   try {
-                    if (exportKind === "docx") {
-                      await exportGradingDocx(result, subjectTitle, safeExportName, exportOpts);
-                    } else {
-                      await exportGradingXlsx(result, subjectTitle, safeExportName, exportOpts);
+                    const insights = resolveBatchInsightsForExport(
+                      subject,
+                      insightEntries,
+                      cachedBatchInsights,
+                      exportOpts.includeLearningReport,
+                      exportOpts.includeVariants,
+                    );
+                    if (exportFormats.docx) {
+                      await exportGradingDocx(result, subjectTitle, safeExportName, exportOpts, insights);
                     }
-                    setExportKind(null);
+                    if (exportFormats.xlsx) {
+                      await exportGradingXlsx(result, subjectTitle, safeExportName, exportOpts, insights);
+                    }
+                    setExportOpen(false);
                   } catch (e) {
                     console.error(e);
                     window.alert("导出失败，请确认已安装依赖：npm install");
+                  } finally {
+                    setExportBusy(false);
                   }
                 }}
               >
-                开始导出
+                {exportBusy ? "导出中…" : "开始导出"}
               </button>
             </div>
           }
         >
           <div className="space-y-4">
+            <div className={APP_DIALOG_PANEL}>
+              <p className={APP_DIALOG_PANEL_TITLE}>导出格式（可多选）</p>
+              <div className="mt-3 space-y-2">
+                {(
+                  [
+                    ["docx", "Word 文档 (.docx)"],
+                    ["xlsx", "Excel 表格 (.xlsx)"],
+                  ] as const
+                ).map(([key, label]) => (
+                  <label
+                    key={key}
+                    className={[
+                      "flex min-h-10 cursor-pointer items-center gap-3 rounded-xl border px-3 py-2 text-small font-semibold transition",
+                      exportFormats[key]
+                        ? "border-primary/35 bg-primary-tint/80 text-[#006D41] ring-1 ring-primary/20"
+                        : "border-black/[0.1] bg-white text-ink-muted hover:border-primary/25",
+                    ].join(" ")}
+                  >
+                    <input
+                      type="checkbox"
+                      className="h-4 w-4 shrink-0 rounded border-black/[0.2] text-[#51c527] focus:ring-brand"
+                      checked={exportFormats[key]}
+                      onChange={(e) => {
+                        const checked = e.target.checked;
+                        setExportFormats((prev) => {
+                          const next = { ...prev, [key]: checked };
+                          if (!next.docx && !next.xlsx) return prev;
+                          return next;
+                        });
+                      }}
+                    />
+                    {label}
+                  </label>
+                ))}
+              </div>
+            </div>
             <div className={APP_DIALOG_PANEL}>
               <p className={APP_DIALOG_PANEL_TITLE}>分项列表</p>
               <select
@@ -633,6 +725,8 @@ export function ScoreResultCard({
                     ["includeStrengths", "亮点与要点"],
                     ["includeImprovements", "订正与加强建议"],
                     ["includeWeakTags", "薄弱知识点"],
+                    ["includeLearningReport", insightEntries.length > 1 ? "学情分析报告（本批）" : "学情分析报告（本份）"],
+                    ["includeVariants", "知识点与变形题"],
                   ] as const
                 ).map(([key, label]) => (
                   <label key={key} className="flex cursor-pointer items-center gap-2 text-small text-ink">

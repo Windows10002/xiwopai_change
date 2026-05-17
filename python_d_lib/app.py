@@ -40,6 +40,18 @@ def _sanitize_teacher_note(s: str) -> str:
 
 
 try:
+    from dashscope_config import configure_dashscope, get_dashscope_api_key, startup_key_status, user_facing_api_error
+except ImportError:
+    def configure_dashscope():
+        return False
+
+    def get_dashscope_api_key():
+        return ""
+
+    def user_facing_api_error():
+        return "未配置 DASHSCOPE_API_KEY"
+
+try:
     from math_correct import call_ai_math
 except ImportError:
     call_ai_math = None
@@ -82,7 +94,7 @@ def math_process(image_path: str, *, grade_level: str = "", teacher_note: str = 
         return {
             "error": True,
             "score": "—",
-            "comments": "批改失败，请检查图片清晰度、网络或 API 配置后重试。",
+            "comments": user_facing_api_error(),
             "weak_points": [],
             "questions": [],
             "details": [],
@@ -540,7 +552,9 @@ def uploaded_file(filename):
 
 
 if __name__ == "__main__":
-    # 默认 5001，避免 Windows 上 5000 常被其它服务占用；可用环境变量 PORT 覆盖
-    port = int(os.environ.get("PORT", "5008"))
+    # 默认 5005；开发前端 Vite 代理需与此端口一致
+    port = int(os.environ.get("PORT", "5006"))
+    for line in startup_key_status().splitlines():
+        print(f" * {line}")
     print(f" * 服务地址: http://127.0.0.1:{port}  （React 页: /math /english；开发前端请 npm run dev 并代理到此端口）")
     app.run(debug=True, host="127.0.0.1", port=port)

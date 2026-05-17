@@ -16,7 +16,9 @@ from typing import Any
 import dashscope
 from dashscope import Generation
 
-dashscope.api_key = os.getenv("DASHSCOPE_API_KEY", "")
+from dashscope_config import configure_dashscope, get_dashscope_api_key
+
+configure_dashscope()
 
 TEXT_MODEL = os.getenv("DASHSCOPE_TEXT_MODEL", "qwen-plus")
 
@@ -147,12 +149,18 @@ def aggregate_batch_items(subject: str, items: list[dict]) -> dict[str, Any]:
 
 
 def _rule_learning_report(stats: dict, *, group_name: str = "", grade_level: str = "") -> dict:
+    paper_count = int(stats.get("paper_count") or 0)
+    is_single = paper_count == 1
+    scope = group_name or ("本份作业" if is_single else "本批作业")
     lines = [
         "## 学情分析报告",
         "",
-        f"- **批改范围**：{group_name or '本批作业'}",
-        f"- **份数**：{stats.get('paper_count', 0)} 份",
+        f"- **批改范围**：{scope}",
     ]
+    if is_single:
+        lines.append("- **类型**：单份作业")
+    else:
+        lines.append(f"- **份数**：{paper_count} 份")
     if grade_level:
         lines.append(f"- **年级/学段**：{grade_level}")
     if stats.get("avg_score_percent") is not None:
@@ -180,7 +188,7 @@ def _rule_learning_report(stats: dict, *, group_name: str = "", grade_level: str
         for p in patterns[:8]:
             lines.append(f"- {p['pattern']}（{p['count']} 次）")
     else:
-        lines.append("- 本批以正确题为主，错题模式不明显。")
+        lines.append("- 以正确题为主，错题模式不明显。" if is_single else "- 本批以正确题为主，错题模式不明显。")
 
     lines.extend(["", "### 教学建议"])
     for s in stats.get("teaching_suggestions") or []:
@@ -195,7 +203,17 @@ def _rule_learning_report(stats: dict, *, group_name: str = "", grade_level: str
 
 
 def _rule_knowledge_variants(stats: dict, *, subject: str, grade_level: str = "") -> dict:
-    knowledge = stats.get("knowledge_points") or stats.get("weak_knowledge_ranked") or []
+    paper_count = int(stats.get("paper_count") or 0)
+    is_single = paper_count == 1
+    knowledge = list(stats.get("knowledge_points") or stats.get("weak_knowledge_ranked") or [])
+    patterns = stats.get("error_patterns") or []
+    if is_single and not knowledge and patterns:
+        for p in patterns[:6]:
+            pat = p.get("pattern") if isinstance(p, dict) else str(p)
+            label = pat.split("·", 1)[-1].strip() if "·" in pat else pat
+            if label:
+                knowledge.append({"name": label[:48], "tag": label[:48], "count": p.get("count", 1) if isinstance(p, dict) else 1})
+
     summary = []
     for k in knowledge[:10]:
         name = k.get("name") or k.get("tag") or "综合"
@@ -204,25 +222,56 @@ def _rule_knowledge_variants(stats: dict, *, subject: str, grade_level: str = ""
             {
                 "name": name,
                 "frequency": cnt,
-                "mastery_hint": "需巩固" if cnt >= 2 else "偶发",
+                "mastery_hint": "需巩固" if cnt >= 2 else ("本卷薄弱" if is_single else "偶发"),
                 "typical_errors": [],
             }
         )
 
     variants = []
-    for k in knowledge[:6]:
-        name = k.get("name") or k.get("tag") or "本批知识点"
+    seen: set[str] = set()
+    limit = 4 if is_single else 6
+
+    def _add_variant(name: str, variation_type: str, stem: str) -> None:
+        key = name[:40]
+        if key in seen or len(variants) >= (4 if is_single else 8):
+            return
+        seen.add(key)
         variants.append(
             {
                 "knowledge_point": name,
                 "difficulty": "中等",
-                "variation_type": "数值变式" if subject == "math" else "句型变式",
-                "stem": f"请围绕「{name}」设计一题{ '计算' if subject == 'math' else '表达' }练习（课堂可手写补充具体题干）。",
-                "answer_hint": "对照本批错题中的正确步骤与订正要点完成。",
+                "variation_type": variation_type,
+                "stem": stem,
+                "answer_hint": "对照本卷错题订正要点完成。" if is_single else "对照本批错题中的正确步骤与订正要点完成。",
             }
         )
 
-    intro = f"本批（{stats.get('paper_count', 0)} 份）涉及知识点已按出现频次整理；变式题可在课堂由教师据学情微调难度。"
+    for k in knowledge[:limit]:
+        name = k.get("name") or k.get("tag") or ("本份知识点" if is_single else "本批知识点")
+        _add_variant(
+            name,
+            "数值变式" if subject == "math" else "句型变式",
+            f"请围绕「{name}」设计一题{'计算' if subject == 'math' else '表达'}练习（课堂可手写补充具体题干）。",
+        )
+
+    for p in patterns:
+        if len(variants) >= (4 if is_single else 8):
+            break
+        pat = p.get("pattern") if isinstance(p, dict) else str(p)
+        label = pat.split("·", 1)[-1].strip() if "·" in pat else pat
+        if not label:
+            continue
+        cnt = p.get("count", 1) if isinstance(p, dict) else 1
+        _add_variant(
+            label[:48],
+            "纠错变式" if subject == "math" else "表达变式",
+            f"针对「{label}」类错题设计一题巩固练习（{'本卷' if is_single else '本批'}出现 {cnt} 次）。",
+        )
+
+    if is_single:
+        intro = "基于本份作业的错题与薄弱点整理的变形题建议；可运行 AI 深度分析生成更具体题干。"
+    else:
+        intro = f"本批（{paper_count} 份）涉及知识点已按出现频次整理；变式题可在课堂由教师据学情微调难度。"
     if grade_level:
         intro = f"面向{grade_level}：" + intro
 
@@ -254,9 +303,10 @@ def _extract_json_object(text: str) -> dict | None:
 
 
 def _call_text_llm(system: str, user: str) -> str | None:
-    if not dashscope.api_key:
+    if not get_dashscope_api_key():
         logging.warning("DASHSCOPE_API_KEY 未配置，跳过文本 LLM")
         return None
+    configure_dashscope()
     try:
         resp = Generation.call(
             model=TEXT_MODEL,
@@ -306,12 +356,19 @@ def _enrich_with_llm(
         ensure_ascii=False,
     )
 
+    paper_count = int(stats.get("paper_count") or 0)
+    is_single = paper_count == 1
     subj_cn = "数学" if subject == "math" else "英语作文"
     system = (
-        f"你是{subj_cn}教研员，根据一批已批改作业的聚合数据输出 JSON，不要输出 markdown 代码块外的说明。"
+        f"你是{subj_cn}教研员，根据{'一份' if is_single else '一批'}已批改作业的聚合数据输出 JSON，不要输出 markdown 代码块外的说明。"
         "必须只返回一个 JSON 对象，包含 learning_report 与 knowledge_variants 两个字段。"
     )
-    user = f"""根据以下批量批改聚合数据，生成学情分析与变式题建议。
+    variant_req = (
+        "变式题 2～4 道，紧扣本份作业错题与薄弱点，题干具体可练习，符合年级水平。"
+        if is_single
+        else "变式题 4～8 道，覆盖本批高频薄弱点，题干具体可练习，符合年级水平。"
+    )
+    user = f"""根据以下{'单份' if is_single else '批量'}批改聚合数据，生成学情分析与变式题建议。
 
 数据：
 {payload}
@@ -332,9 +389,10 @@ def _enrich_with_llm(
 }}
 
 要求：
-1. 变式题 4～8 道，覆盖本批高频薄弱点，题干具体可练习，符合年级水平。
+1. {variant_req}
 2. 错题模式要归纳共性（如运算顺序、分数通分、时态一致等），不要只罗列文件名。
-3. 使用中文。"""
+3. {"针对这一名学生/这一份作业给出可操作的巩固建议。" if is_single else "结合本批整体情况给出教学建议。"}
+4. 使用中文。"""
 
     raw = _call_text_llm(system, user)
     if not raw:
