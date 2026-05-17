@@ -119,6 +119,14 @@ def spa_built():
     return os.path.isfile(_spa_index_path())
 
 
+def _send_spa_index():
+    """返回 SPA 入口并禁止缓存 index.html，避免浏览器沿用旧 JS 文件名。"""
+    resp = send_file(_spa_index_path())
+    resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+    resp.headers["Pragma"] = "no-cache"
+    return resp
+
+
 def subject_name_cn(subject: str) -> str:
     return {"english": "英语作文", "math": "数学作业", "chinese": "语文作文"}.get(subject, subject)
 
@@ -137,13 +145,14 @@ def frontend_vite_assets(filename):
 @app.route("/")
 def index():
     if spa_built():
-        return send_file(_spa_index_path())
+        return _send_spa_index()
     return render_template("index.html")
 
 
 @app.route("/login")
 @app.route("/math")
 @app.route("/english")
+@app.route("/settings")
 def spa_shell():
     """BrowserRouter 子路径：必须返回同一 index.html，否则刷新或直接打开 /login 会 404。"""
     if not spa_built():
@@ -151,7 +160,7 @@ def spa_shell():
             404,
             description="未找到前端构建。请在项目下执行: cd frontend && npm install && npm run build",
         )
-    return send_file(_spa_index_path())
+    return _send_spa_index()
 
 
 @app.route("/grading/<subject>")
@@ -304,10 +313,186 @@ def api_grading_feedback():
     return jsonify({"ok": True})
 
 
+GRADING_DISPUTES_FILE = os.path.join(BASE_DIR, "grading_disputes.json")
+
+
+def _load_disputes():
+    if not os.path.isfile(GRADING_DISPUTES_FILE):
+        return []
+    try:
+        with open(GRADING_DISPUTES_FILE, encoding="utf-8") as fh:
+            data = json.load(fh)
+        return data if isinstance(data, list) else []
+    except (OSError, json.JSONDecodeError):
+        return []
+
+
+def _save_disputes(items):
+    with open(GRADING_DISPUTES_FILE, "w", encoding="utf-8") as fh:
+        json.dump(items, fh, ensure_ascii=False, indent=2)
+
+
+def _dispute_from_payload(payload: dict) -> dict:
+    user_feedback = (payload.get("user_feedback") or "").strip()
+    return {
+        "feedback_scope": _feedback_clip(payload.get("feedback_scope"), 24) or "question",
+        "subject": _feedback_clip(payload.get("subject"), 16),
+        "dimension_key": _feedback_clip(payload.get("dimension_key"), 160),
+        "dimension_label": _feedback_clip(payload.get("dimension_label"), 400),
+        "status_snapshot": _feedback_clip(payload.get("status"), 40),
+        "value": payload.get("value"),
+        "max": payload.get("max"),
+        "detail_excerpt": _feedback_clip(payload.get("detail_excerpt"), 1200),
+        "user_feedback": _feedback_clip(user_feedback, 4000),
+        "job_file_base": _feedback_clip(payload.get("job_file_base"), 160),
+        "subject_title": _feedback_clip(payload.get("subject_title"), 80),
+        "overall_label": _feedback_clip(payload.get("overall_label"), 200),
+        "score_percent": payload.get("score_percent"),
+        "client_ts": payload.get("client_ts"),
+        "image_ref": _feedback_clip(payload.get("image_ref"), 240),
+        "image_url": _feedback_clip(payload.get("image_url"), 500),
+        "history_entry_id": _feedback_clip(payload.get("history_entry_id"), 80),
+        "local_file_name": _feedback_clip(payload.get("local_file_name"), 240),
+        "batch_index": payload.get("batch_index"),
+        "batch_total": payload.get("batch_total"),
+        "submitter_role": _feedback_clip(payload.get("submitter_role"), 16) or "student",
+        "student_grade": payload.get("student_grade"),
+    }
+
+
+def _append_grading_feedback_record(record: dict):
+    with open(GRADING_FEEDBACK_LOG, "a", encoding="utf-8") as fh:
+        fh.write(json.dumps(record, ensure_ascii=False) + "\n")
+
+
+@app.route("/api/grading-disputes", methods=["GET", "POST"])
+def api_grading_disputes():
+  if request.method == "GET":
+    items = _load_disputes()
+    status_q = (request.args.get("status") or "").strip()
+    if status_q in ("pending", "confirmed", "rejected"):
+      items = [x for x in items if x.get("status") == status_q]
+    ids_raw = (request.args.get("ids") or "").strip()
+    if ids_raw:
+      want = {s.strip() for s in ids_raw.split(",") if s.strip()}
+      items = [x for x in items if x.get("id") in want]
+    items.sort(key=lambda x: x.get("created_at") or "", reverse=True)
+    return jsonify({"ok": True, "items": items})
+
+  if not request.is_json:
+    return jsonify({"ok": False, "message": "请求需为 JSON"}), 400
+  payload = request.get_json(silent=True)
+  if not isinstance(payload, dict):
+    return jsonify({"ok": False, "message": "无效请求体"}), 400
+
+  user_feedback = (payload.get("user_feedback") or "").strip()
+  if len(user_feedback) < 8:
+    return jsonify({"ok": False, "message": "请至少用 8 个字说明判题问题。"}), 400
+
+  body = _dispute_from_payload(payload)
+  dispute_id = uuid.uuid4().hex
+  record = {
+    "id": dispute_id,
+    "created_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+    "status": "pending",
+    "teacher_reply": "",
+    "reviewed_at": None,
+    **body,
+  }
+  items = _load_disputes()
+  items.append(record)
+  try:
+    _save_disputes(items)
+  except OSError as e:
+    print(f"grading dispute write error: {e}")
+    return jsonify({"ok": False, "message": "服务器暂无法保存申诉，请稍后重试。"}), 500
+  return jsonify({"ok": True, "id": dispute_id})
+
+
+@app.route("/api/grading-disputes/<dispute_id>/review", methods=["POST"])
+def api_grading_dispute_review(dispute_id):
+  if not request.is_json:
+    return jsonify({"ok": False, "message": "请求需为 JSON"}), 400
+  payload = request.get_json(silent=True)
+  if not isinstance(payload, dict):
+    return jsonify({"ok": False, "message": "无效请求体"}), 400
+
+  action = (payload.get("action") or "").strip()
+  if action not in ("confirm", "reject"):
+    return jsonify({"ok": False, "message": "action 须为 confirm 或 reject"}), 400
+
+  teacher_reply = _feedback_clip(payload.get("teacher_reply"), 2000)
+  if action == "reject" and len(teacher_reply.strip()) < 4:
+    return jsonify({"ok": False, "message": "驳回时请至少用 4 个字向学生说明理由。"}), 400
+
+  items = _load_disputes()
+  target = None
+  for item in items:
+    if item.get("id") == dispute_id:
+      target = item
+      break
+  if not target:
+    return jsonify({"ok": False, "message": "未找到该申诉"}), 404
+  if target.get("status") != "pending":
+    return jsonify({"ok": False, "message": "该申诉已处理"}), 400
+
+  reviewed_at = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+  if action == "confirm":
+    target["status"] = "confirmed"
+    target["teacher_reply"] = teacher_reply
+    target["reviewed_at"] = reviewed_at
+    feedback_record = {
+      "saved_at": reviewed_at,
+      "feedback_scope": target.get("feedback_scope") or "question",
+      "subject": target.get("subject"),
+      "dimension_key": target.get("dimension_key"),
+      "dimension_label": target.get("dimension_label"),
+      "status": target.get("status_snapshot"),
+      "value": target.get("value"),
+      "max": target.get("max"),
+      "detail_excerpt": target.get("detail_excerpt"),
+      "user_feedback": target.get("user_feedback"),
+      "job_file_base": target.get("job_file_base"),
+      "subject_title": target.get("subject_title"),
+      "overall_label": target.get("overall_label"),
+      "score_percent": target.get("score_percent"),
+      "client_ts": target.get("client_ts"),
+      "image_ref": target.get("image_ref"),
+      "image_url": target.get("image_url"),
+      "history_entry_id": target.get("history_entry_id"),
+      "local_file_name": target.get("local_file_name"),
+      "batch_index": target.get("batch_index"),
+      "batch_total": target.get("batch_total"),
+      "source": "student_dispute_confirmed",
+      "dispute_id": dispute_id,
+      "teacher_reply": teacher_reply,
+    }
+    try:
+      _append_grading_feedback_record(feedback_record)
+      _save_disputes(items)
+    except OSError as e:
+      print(f"grading dispute confirm error: {e}")
+      return jsonify({"ok": False, "message": "写入反馈日志失败，请稍后重试。"}), 500
+  else:
+    target["status"] = "rejected"
+    target["teacher_reply"] = teacher_reply
+    target["reviewed_at"] = reviewed_at
+    try:
+      _save_disputes(items)
+    except OSError as e:
+      print(f"grading dispute reject error: {e}")
+      return jsonify({"ok": False, "message": "保存驳回结果失败，请稍后重试。"}), 500
+
+  return jsonify({"ok": True})
+
+
 @app.route("/uploads/<filename>")
 def uploaded_file(filename):
     return app.send_from_directory(app.config["UPLOAD_FOLDER"], filename)
 
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    # 默认 5001，避免 Windows 上 5000 常被其它服务占用；可用环境变量 PORT 覆盖
+    port = int(os.environ.get("PORT", "5008"))
+    print(f" * 服务地址: http://127.0.0.1:{port}  （React 页: /math /english；开发前端请 npm run dev 并代理到此端口）")
+    app.run(debug=True, host="127.0.0.1", port=port)

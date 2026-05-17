@@ -4,6 +4,8 @@ import { CheckCircle2, FileSpreadsheet, FileText, Lightbulb, ListChecks, Sparkle
 import { CUTE_ICON } from "@/components/atoms/cuteIcon";
 import { buildScoringStrategyModel, type ScoringStrategyModel } from "@/lib/scoringStrategyText";
 import { submitGradingFeedback, traceToFeedbackFields, type GradingFeedbackTrace } from "@/lib/gradingFeedbackApi";
+import { submitGradingDispute } from "@/lib/gradingDisputeApi";
+import { useAppSession } from "@/hooks/useAppSession";
 import {
   IpMascotLoading,
   IpMascotMagnifierEmpty,
@@ -32,6 +34,8 @@ type ScoreResultCardProps = {
   exportBaseName: string;
   /** 当前卷追溯：服务端上传路径、本地历史 id、批次下标等，写入反馈 JSONL */
   gradingFeedbackTrace?: GradingFeedbackTrace;
+  /** 教师修正单题得分后回写结果（仅教师逐题反馈） */
+  onDimensionUpdate?: (dimensionKey: string, patch: Partial<DimensionScore>) => void;
 };
 
 type InsightTab = "summary" | "strengths" | "improve";
@@ -109,8 +113,11 @@ export function ScoreResultCard({
   subjectTitle,
   exportBaseName,
   gradingFeedbackTrace,
+  onDimensionUpdate,
 }: ScoreResultCardProps) {
   const prefs = useUserPreferences();
+  const session = useAppSession();
+  const isTeacher = session?.role === "teacher";
   const empty = result === null && !isGrading;
   const [insightTab, setInsightTab] = useState<InsightTab>(() => prefs.defaultInsightTab as InsightTab);
   const [strategyOpen, setStrategyOpen] = useState(false);
@@ -124,6 +131,8 @@ export function ScoreResultCard({
   const [feedbackBusy, setFeedbackBusy] = useState(false);
   const [feedbackErr, setFeedbackErr] = useState<string | null>(null);
   const [feedbackToast, setFeedbackToast] = useState<string | null>(null);
+  const [teacherEditValue, setTeacherEditValue] = useState("");
+  const [teacherEditStatus, setTeacherEditStatus] = useState("正确");
 
   const strategyModel = useMemo((): ScoringStrategyModel | null => {
     if (!result) return null;
@@ -174,9 +183,51 @@ export function ScoreResultCard({
     return lines;
   }, [gradingFeedbackTrace]);
 
+  const buildQuestionFeedbackPayload = (dim: DimensionScore, msg: string) => ({
+    feedback_scope: "question" as const,
+    subject,
+    user_feedback: msg,
+    client_ts: Date.now(),
+    dimension_key: dim.key,
+    dimension_label: dim.label,
+    status: dim.status,
+    value: dim.value,
+    max: dim.max,
+    detail_excerpt: (dim.detail ?? "").slice(0, 800),
+    job_file_base: safeExportName,
+    subject_title: subjectTitle,
+    overall_label: result!.overallLabel,
+    score_percent: result!.scorePercent,
+    ...traceToFeedbackFields(gradingFeedbackTrace),
+  });
+
+  const handleTeacherSaveQuestionScore = () => {
+    if (!result || !feedbackUi || feedbackUi.mode !== "question") return;
+    const dim = feedbackUi.dim;
+    const parsed = Number.parseFloat(teacherEditValue.replace(/,/g, ".").trim());
+    if (!Number.isFinite(parsed)) {
+      setFeedbackErr("请输入有效得分。");
+      return;
+    }
+    const clamped = Math.min(dim.max, Math.max(0, Math.round(parsed * 10) / 10));
+    onDimensionUpdate?.(dim.key, {
+      value: clamped,
+      status: subject === "math" ? teacherEditStatus : dim.status,
+    });
+    setFeedbackUi(null);
+    setFeedbackText("");
+    setFeedbackErr(null);
+    setFeedbackToast("已更新本题得分。");
+    window.setTimeout(() => setFeedbackToast(null), 4500);
+  };
+
   const handleSubmitQuestionFeedback = async () => {
     const msg = feedbackText.trim();
     if (!result || !feedbackUi || feedbackUi.mode !== "question") return;
+    if (isTeacher) {
+      handleTeacherSaveQuestionScore();
+      return;
+    }
     if (msg.length < 8) {
       setFeedbackErr("请至少用 8 个字说明您认为错在哪里或应如何判。");
       return;
@@ -185,27 +236,15 @@ export function ScoreResultCard({
     setFeedbackBusy(true);
     setFeedbackErr(null);
     try {
-      await submitGradingFeedback({
-        feedback_scope: "question",
-        subject,
-        user_feedback: msg,
-        client_ts: Date.now(),
-        dimension_key: dim.key,
-        dimension_label: dim.label,
-        status: dim.status,
-        value: dim.value,
-        max: dim.max,
-        detail_excerpt: (dim.detail ?? "").slice(0, 800),
-        job_file_base: safeExportName,
-        subject_title: subjectTitle,
-        overall_label: result.overallLabel,
-        score_percent: result.scorePercent,
-        ...traceToFeedbackFields(gradingFeedbackTrace),
+      await submitGradingDispute({
+        ...buildQuestionFeedbackPayload(dim, msg),
+        submitter_role: "student",
+        student_grade: session?.studentGrade ?? null,
       });
       setFeedbackUi(null);
       setFeedbackText("");
-      setFeedbackToast("感谢您的反馈，已记录，用于后续优化批改模型。");
-      window.setTimeout(() => setFeedbackToast(null), 4500);
+      setFeedbackToast("已提交给任课教师，请等待审核；可在「设置」中查看进度。");
+      window.setTimeout(() => setFeedbackToast(null), 5000);
     } catch (e) {
       setFeedbackErr(e instanceof Error ? e.message : "提交失败，请稍后重试。");
     } finally {
@@ -223,21 +262,38 @@ export function ScoreResultCard({
     setFeedbackBusy(true);
     setFeedbackErr(null);
     try {
-      await submitGradingFeedback({
-        feedback_scope: "whole_paper",
-        subject,
-        user_feedback: msg,
-        client_ts: Date.now(),
-        job_file_base: safeExportName,
-        subject_title: subjectTitle,
-        overall_label: result.overallLabel,
-        score_percent: result.scorePercent,
-        ...traceToFeedbackFields(gradingFeedbackTrace),
-      });
+      if (isTeacher) {
+        await submitGradingFeedback({
+          feedback_scope: "whole_paper",
+          subject,
+          user_feedback: msg,
+          client_ts: Date.now(),
+          job_file_base: safeExportName,
+          subject_title: subjectTitle,
+          overall_label: result.overallLabel,
+          score_percent: result.scorePercent,
+          ...traceToFeedbackFields(gradingFeedbackTrace),
+        });
+        setFeedbackToast("感谢您的整卷反馈，已记录。");
+      } else {
+        await submitGradingDispute({
+          feedback_scope: "whole_paper",
+          subject,
+          user_feedback: msg,
+          client_ts: Date.now(),
+          job_file_base: safeExportName,
+          subject_title: subjectTitle,
+          overall_label: result.overallLabel,
+          score_percent: result.scorePercent,
+          submitter_role: "student",
+          student_grade: session?.studentGrade ?? null,
+          ...traceToFeedbackFields(gradingFeedbackTrace),
+        });
+        setFeedbackToast("整卷申诉已提交给任课教师，请等待审核。");
+      }
       setFeedbackUi(null);
       setFeedbackText("");
-      setFeedbackToast("感谢您的整卷反馈，已记录。");
-      window.setTimeout(() => setFeedbackToast(null), 4500);
+      window.setTimeout(() => setFeedbackToast(null), 5000);
     } catch (e) {
       setFeedbackErr(e instanceof Error ? e.message : "提交失败，请稍后重试。");
     } finally {
@@ -412,6 +468,8 @@ export function ScoreResultCard({
                       setFeedbackUi({ mode: "question", dim: d });
                       setFeedbackText("");
                       setFeedbackErr(null);
+                      setTeacherEditValue(String(d.value));
+                      setTeacherEditStatus(d.status ?? "正确");
                     }
                   : undefined
               }
@@ -817,12 +875,20 @@ export function ScoreResultCard({
                 </span>
                 <div className="min-w-0">
                   <p id="grading-feedback-title" className="text-body font-extrabold text-ink">
-                    {feedbackUi.mode === "whole_paper" ? "整卷反馈" : "判题有误反馈"}
+                    {feedbackUi.mode === "whole_paper"
+                      ? "整卷反馈"
+                      : isTeacher
+                        ? "修正本题得分"
+                        : "判题有误反馈"}
                   </p>
                   <p className="mt-1 text-caption leading-snug text-ink-muted">
                     {feedbackUi.mode === "whole_paper"
-                      ? "对整卷批改的总体意见、多题系统性误判、得分尺度等，一条说明即可。提交时会附带当前卷截图 id / 本地历史 id（若有），便于对照卷面与优化模型。"
-                      : "若您认为本题判定状态或给分不合理，请简要说明真实情况；提交时会附带当前卷截图 id / 本地历史 id（若有）。"}
+                      ? isTeacher
+                        ? "对整卷批改的总体意见、多题系统性误判、得分尺度等，一条说明即可。提交时会附带当前卷追溯信息。"
+                        : "对整卷批改的总体意见将提交给任课教师审核；确认后会用于优化判题逻辑。"
+                      : isTeacher
+                        ? "教师可直接修改本题得分与判定状态，修改后立即反映在右侧分项与综合分。"
+                        : "若您认为本题判定或给分不合理，请说明情况并提交给任课教师；教师确认后将用于优化判题。"}
                   </p>
                 </div>
               </div>
@@ -871,6 +937,7 @@ export function ScoreResultCard({
                   </p>
                 </div>
               ) : null}
+              {!(feedbackUi.mode === "question" && isTeacher) ? (
               <div>
                 <label htmlFor="grading-feedback-text" className="mb-1.5 block text-small font-bold text-ink">
                   您的说明（至少 8 字）
@@ -888,8 +955,46 @@ export function ScoreResultCard({
                   }
                   className="w-full resize-y rounded-xl border border-black/[0.1] bg-white px-3 py-2.5 text-small leading-relaxed text-ink shadow-sm outline-none transition placeholder:text-ink-subtle focus:border-primary/35 focus:ring-2 focus:ring-primary/15"
                 />
-                <p className="mt-1 text-[0.65rem] text-ink-muted">{feedbackText.trim().length}/2000（提交至服务器需已启动后端）</p>
+                <p className="mt-1 text-[0.65rem] text-ink-muted">{feedbackText.trim().length}/2000（需已启动后端）</p>
               </div>
+              ) : null}
+              {feedbackUi.mode === "question" && isTeacher ? (
+                <div className="space-y-3 rounded-xl border border-primary/15 bg-primary-tint/25 px-3 py-3">
+                  <div>
+                    <label htmlFor="teacher-edit-score" className="mb-1 block text-small font-bold text-ink">
+                      本题得分（满分 {feedbackUi.dim.max}）
+                    </label>
+                    <input
+                      id="teacher-edit-score"
+                      type="number"
+                      min={0}
+                      max={feedbackUi.dim.max}
+                      step={0.5}
+                      value={teacherEditValue}
+                      onChange={(e) => setTeacherEditValue(e.target.value)}
+                      className="w-full rounded-xl border border-black/[0.1] bg-white px-3 py-2 text-small font-mono text-ink shadow-sm outline-none focus:border-primary/35 focus:ring-2 focus:ring-primary/15"
+                    />
+                  </div>
+                  {subject === "math" ? (
+                    <div>
+                      <label htmlFor="teacher-edit-status" className="mb-1 block text-small font-bold text-ink">
+                        判定状态
+                      </label>
+                      <select
+                        id="teacher-edit-status"
+                        value={teacherEditStatus}
+                        onChange={(e) => setTeacherEditStatus(e.target.value)}
+                        className="w-full rounded-xl border border-black/[0.1] bg-white px-3 py-2 text-small text-ink outline-none focus:border-primary/35 focus:ring-2 focus:ring-primary/15"
+                      >
+                        <option value="正确">正确</option>
+                        <option value="过程不规范">过程不规范</option>
+                        <option value="错误">错误</option>
+                        <option value="未作答">未作答</option>
+                      </select>
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
               {feedbackErr ? <p className="text-caption font-semibold text-red-600">{feedbackErr}</p> : null}
             </div>
             <div className="flex flex-col-reverse gap-2 border-t border-black/[0.06] px-4 py-4 sm:flex-row sm:justify-end sm:px-5">
@@ -913,7 +1018,13 @@ export function ScoreResultCard({
                 }
                 className="btn-brand-primary min-h-10 px-6 text-small disabled:opacity-60"
               >
-                {feedbackBusy ? "提交中…" : "提交反馈"}
+                {feedbackBusy
+                  ? "提交中…"
+                  : feedbackUi.mode === "question" && isTeacher
+                    ? "保存得分"
+                    : isTeacher
+                      ? "提交反馈"
+                      : "提交申诉"}
               </button>
             </div>
           </div>

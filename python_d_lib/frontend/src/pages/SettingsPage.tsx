@@ -16,6 +16,7 @@ import {
   type UserPreferences,
 } from "@/lib/userPreferences";
 import type { ExportDimensionFilter } from "@/lib/exportGrading";
+import { StudentGradingDisputePanel, TeacherGradingDisputePanel } from "@/components/molecules/GradingDisputePanels";
 
 function gradeLabel(g: number | null, role: string): string {
   if (role === "teacher") return "—（教师）";
@@ -122,6 +123,11 @@ export function SettingsPage() {
               </button>
             ) : null}
           </PrefSection>
+
+          {sessionInfo?.role === "teacher" ? <TeacherGradingDisputePanel /> : null}
+          {sessionInfo?.role === "student" ? (
+            <StudentGradingDisputePanel studentGrade={sessionInfo.studentGrade} />
+          ) : null}
 
           <PrefSection title="界面与辅助" desc="影响全站字号、动画与帮助入口。">
             <PrefToggle

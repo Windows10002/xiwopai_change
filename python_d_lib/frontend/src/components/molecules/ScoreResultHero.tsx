@@ -24,7 +24,7 @@ function scoreHue(percent: number) {
 }
 
 /**
- * 综合得分：居中排版 + 彩色横向进度条；换算满分并入本区。
+ * 综合得分：单行展示分数与得分率 + 彩色横向进度条；换算满分并入本区。
  */
 export function ScoreResultHero({
   scorePercent,
@@ -46,7 +46,7 @@ export function ScoreResultHero({
     <div className="flex flex-col gap-5 rounded-[1.5rem] border border-primary/15 bg-gradient-to-br from-white via-primary-tint/55 to-white p-5 text-center shadow-sm sm:p-6">
       <div className="flex flex-col items-center gap-4">
         <div className="flex w-full max-w-xl flex-col items-center gap-3">
-          <div className="flex w-full flex-wrap items-start justify-center gap-2 sm:gap-3">
+          <div className="flex w-full flex-wrap items-center justify-center gap-2 sm:gap-3">
             {onOpenScoringStrategy ? (
               <button
                 type="button"
@@ -58,33 +58,36 @@ export function ScoreResultHero({
                 <Scale className="h-4 w-4 shrink-0" {...CUTE_ICON} aria-hidden />
                 <span className="text-[0.65rem] font-bold leading-none text-ink-muted">给分策略</span>
               </button>
-            ) : (
-              <span className="h-9 shrink-0" aria-hidden />
-            )}
-            <div className="min-w-0 flex-1">
-              <div className="mx-auto grid w-full max-w-xs grid-cols-2 gap-x-4 sm:max-w-sm sm:gap-x-8">
-                <p className="text-center text-small font-bold text-ink-muted md:text-body">综合得分</p>
-                <p className="text-center text-small font-bold text-ink-muted md:text-body">得分率</p>
-                <div className="flex flex-wrap items-baseline justify-center gap-x-1 gap-y-0.5 tabular-nums">
-                  <span className="text-5xl font-extrabold leading-none tracking-tight text-brand md:text-6xl">
-                    {clamped}
-                  </span>
-                  <span className="text-lg font-bold text-ink-muted md:text-xl">/ 100</span>
-                </div>
-                <div className="flex items-baseline justify-center gap-0.5 tabular-nums">
-                  <span className="text-2xl font-extrabold leading-none tracking-tight text-teal-700 md:text-3xl">
-                    {clamped}
-                  </span>
-                  <span className="text-lg font-bold text-teal-600/90 md:text-xl">%</span>
-                </div>
-              </div>
-              {showScale && scaled != null ? (
-                <p className="mt-2 text-small font-bold text-[#006D41]">
-                  换算得分：<span className="tabular-nums">{scaled}</span> / {scaleMax} 分（按卷面满分等比例）
-                </p>
-              ) : null}
+            ) : null}
+            <div
+              className="inline-flex max-w-full flex-wrap items-baseline justify-center gap-x-2 gap-y-0.5 rounded-2xl bg-white/75 px-3 py-2 ring-1 ring-primary/12 shadow-inner sm:gap-x-3 sm:px-4 sm:py-2.5"
+              role="group"
+              aria-label={`综合得分 ${clamped} 分，满分 100 分；得分率 ${clamped}%`}
+            >
+              <span className="shrink-0 text-small font-bold tracking-wide text-ink-muted">综合得分</span>
+              <span className="inline-flex items-baseline gap-0.5 tabular-nums">
+                <span className="text-3xl font-extrabold leading-none tracking-tight text-[#00A870] sm:text-4xl md:text-5xl">
+                  {clamped}
+                </span>
+                <span className="text-sm font-semibold text-ink-muted/70 sm:text-base md:text-lg">/ 100</span>
+              </span>
+              <span
+                className="mx-0.5 hidden h-4 w-px shrink-0 self-center bg-primary/20 sm:inline"
+                aria-hidden
+              />
+              <span className="shrink-0 text-small font-bold text-ink-muted">得分率</span>
+              <span className="inline-flex items-baseline tabular-nums">
+                <span className="text-xl font-extrabold leading-none text-teal-700 sm:text-2xl">{clamped}</span>
+                <span className="text-base font-bold text-teal-600/85 sm:text-lg">%</span>
+              </span>
             </div>
           </div>
+
+          {showScale && scaled != null ? (
+            <p className="text-small font-bold text-[#006D41]">
+              换算得分：<span className="tabular-nums">{scaled}</span> / {scaleMax} 分（按卷面满分等比例）
+            </p>
+          ) : null}
 
           {showScaleControls ? (
             <div className="w-full max-w-md">
@@ -146,9 +149,7 @@ export function ScoreResultHero({
       <div className="mx-auto w-full max-w-xl">
         <div className="mb-2 flex justify-between text-small font-medium text-ink-muted md:text-body">
           <span>分数进度</span>
-          <span className="tabular-nums">
-            {clamped} / 100
-          </span>
+          <span className="tabular-nums">{clamped} / 100</span>
         </div>
         <div className="h-3 overflow-hidden rounded-full bg-gray-100 shadow-inner">
           <div

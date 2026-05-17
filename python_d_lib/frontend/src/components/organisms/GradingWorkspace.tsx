@@ -12,6 +12,8 @@ import { UploadDropzone } from "@/components/organisms/UploadDropzone";
 import { ScoreResultCard } from "@/components/organisms/ScoreResultCard";
 import { AiHelpModal } from "@/components/organisms/AiHelpModal";
 import { GradingContextModal } from "@/components/molecules/GradingContextModal";
+import { TeacherGradingDisputeToolbarButton } from "@/components/molecules/GradingDisputePanels";
+import { useAppSession } from "@/hooks/useAppSession";
 import { submitGrade } from "@/lib/gradeApi";
 import type { GradingFeedbackTrace } from "@/lib/gradingFeedbackApi";
 import {
@@ -29,7 +31,7 @@ import { fileToJpegBlobForStorage, fileToJpegThumbDataUrl } from "@/lib/imageThu
 import { saveUserPreferences } from "@/lib/userPreferences";
 import { useUserPreferences } from "@/hooks/useUserPreferences";
 import { CUTE_ICON } from "@/components/atoms/cuteIcon";
-import type { GradingResultDetail, UploadPanelStatus } from "@/types/grading";
+import type { DimensionScore, GradingResultDetail, UploadPanelStatus } from "@/types/grading";
 
 export type GradingWorkspaceProps = {
   /** 面包屑中学科名称（与步骤条并列展示） */
@@ -89,6 +91,8 @@ export function GradingWorkspace({
   const [step, setStep] = useState(1);
 
   const prefs = useUserPreferences();
+  const session = useAppSession();
+  const isTeacher = session?.role === "teacher";
   const [helpOpen, setHelpOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [historyItems, setHistoryItems] = useState<GradingHistoryEntry[]>(() => loadGradingHistory());
@@ -627,6 +631,29 @@ export function GradingWorkspace({
     };
   }, [currentFileIndex, selectedFiles, serverImageUrlByIndex, historyEntryIdByIndex]);
 
+  const applyDimensionUpdate = useCallback(
+    (dimensionKey: string, patch: Partial<DimensionScore>) => {
+      const updater = (prev: GradingResultDetail | null): GradingResultDetail | null => {
+        if (!prev) return prev;
+        const dimensions = prev.dimensions.map((d) => (d.key === dimensionKey ? { ...d, ...patch } : d));
+        const total = dimensions.reduce((s, d) => s + d.value, 0);
+        const max = dimensions.reduce((s, d) => s + d.max, 0);
+        const scorePercent = max > 0 ? Math.round((total / max) * 100) : prev.scorePercent;
+        return { ...prev, dimensions, scorePercent };
+      };
+      setResult(updater);
+      if (selectedFiles.length > 0) {
+        setBatchResults((prev) => {
+          const next = [...prev];
+          const idx = currentFileIndex;
+          if (next[idx]) next[idx] = updater(next[idx]);
+          return next;
+        });
+      }
+    },
+    [currentFileIndex, selectedFiles.length],
+  );
+
   /** 数学：在试卷预览右侧按题序叠对/错/半对（与分项列表顺序一致，非像素级坐标） */
   const paperMarks = useMemo<PaperMark[] | undefined>(() => {
     if (!prefs.showMathPaperMarks || subject !== "math" || !previewUrl || !result?.dimensions?.length) return undefined;
@@ -700,7 +727,8 @@ export function GradingWorkspace({
                 <Breadcrumb items={breadcrumbItems} variant="embedded" contentMaxClassName="max-w-none" />
               </div>
             </div>
-            <div className="mt-3 flex shrink-0 items-center justify-end border-t border-black/[0.06] pt-3 md:mt-0 md:border-t-0 md:pt-0">
+            <div className="mt-3 flex shrink-0 items-center justify-end gap-2 border-t border-black/[0.06] pt-3 md:mt-0 md:border-t-0 md:pt-0">
+              {isTeacher ? <TeacherGradingDisputeToolbarButton /> : null}
               <HistoryDropdown variant="toolbar" subjectScope={subject} />
             </div>
           </div>
@@ -838,6 +866,7 @@ export function GradingWorkspace({
                   subjectTitle={subjectLabel}
                   exportBaseName={exportBaseName}
                   gradingFeedbackTrace={gradingFeedbackTrace}
+                  onDimensionUpdate={applyDimensionUpdate}
                 />
               </div>
             </div>
