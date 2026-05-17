@@ -3,15 +3,15 @@
  * —— 页面视觉单源配置，组件内请优先使用下列语义 token，少用裸十六进制。
  */
 const palette = {
-  /** 主色 · 品牌绿（步骤条、得分、强调） */
-  primary: "#51c527",
-  primaryHover: "#45ad22",
-  /** 导航激活浅底、卡片浅绿区 */
-  primaryLight: "#edf9e6",
-  /** 薄荷浅底（综合得分区、给分策略按钮等） */
-  primaryTint: "#f4fcf0",
-  primaryMuted: "rgba(81, 197, 39, 0.12)",
-  primaryRing: "rgba(81, 197, 39, 0.35)",
+  /** 主色 · 品牌绿（步骤条、强调、主按钮描边等） */
+  primary: "#52C41A",
+  primaryHover: "#389e0d",
+  /** 导航激活浅底、成功氛围 */
+  primaryLight: "#E8F5E9",
+  /** 上传区、预览容器浅绿底 */
+  primaryTint: "#F6FFED",
+  primaryMuted: "rgba(82, 196, 26, 0.12)",
+  primaryRing: "rgba(82, 196, 26, 0.35)",
 
   /** 登录主按钮 · 薄荷绿（实心） */
   accentMint: "#8FD9C1",
@@ -23,7 +23,7 @@ const palette = {
 
   /** 正文 / 导航激活字色 */
   ink: "#1F2937",
-  inkNavActive: "#51c527",
+  inkNavActive: "#006D41",
 
   surfacePage: "#F5F7FA",
   surfaceCard: "#FFFFFF",
@@ -64,7 +64,7 @@ export default {
           DEFAULT: palette.ink,
           navActive: palette.inkNavActive,
           /** 辅助说明（略浅于 gray-500） */
-          muted: "#8C96A0",
+          muted: "#94A3B8",
           /** 次级辅助 */
           subtle: "#B0B8C4",
         },
@@ -103,7 +103,7 @@ export default {
       boxShadow: {
         nav: "0 2px 8px rgba(15, 45, 35, 0.06)",
         card: "0 2px 12px rgba(15, 45, 35, 0.06)",
-        fab: "0 6px 18px rgba(81, 197, 39, 0.32)",
+        fab: "0 6px 18px rgba(82, 196, 26, 0.35)",
       },
       transitionDuration: {
         /** 悬停略加长：导航下划线、卡片上浮等 */

@@ -121,8 +121,8 @@ body {
   /** 深绿色主按钮（开始批改、表单提交等）— hover 200ms */
   .btn-brand-primary {
     @apply inline-flex items-center justify-center rounded-full bg-brand px-8 py-3 text-small font-semibold text-white shadow-card outline-none transition-all duration-button ease-smooth;
-    @apply hover:-translate-y-0.5 hover:bg-brand-hover hover:shadow-[0_10px_28px_rgba(81,197,39,0.32)];
-    @apply active:translate-y-0.5 active:shadow-[0_4px_14px_rgba(81,197,39,0.2)];
+    @apply hover:-translate-y-0.5 hover:bg-brand-hover hover:shadow-[0_10px_28px_rgba(82,196,26,0.38)];
+    @apply active:translate-y-0.5 active:shadow-[0_4px_14px_rgba(82,196,26,0.22)];
     @apply disabled:pointer-events-none disabled:translate-y-0 disabled:bg-gray-300 disabled:text-ink-muted disabled:opacity-100 disabled:shadow-none;
   }
 
@@ -137,8 +137,8 @@ body {
   /** 圆形图标按钮（帮助 FAB） */
   .btn-icon-fab {
     @apply inline-flex items-center justify-center rounded-full bg-brand text-white shadow-fab outline-none transition-all duration-button ease-smooth;
-    @apply hover:-translate-y-1 hover:bg-brand-hover hover:shadow-[0_12px_32px_rgba(81,197,39,0.35)];
-    @apply active:translate-y-0 active:shadow-[0_6px_18px_rgba(81,197,39,0.28)];
+    @apply hover:-translate-y-1 hover:bg-brand-hover hover:shadow-[0_12px_32px_rgba(82,196,26,0.42)];
+    @apply active:translate-y-0 active:shadow-[0_6px_18px_rgba(82,196,26,0.35)];
     @apply disabled:pointer-events-none disabled:translate-y-0 disabled:bg-gray-300 disabled:shadow-none;
   }
 

@@ -35,7 +35,7 @@ export function GradingContextBar({
           aria-live="polite"
           aria-label={`${subjectLabel} · ${tagline}`}
         >
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary-muted text-primary ring-1 ring-primary/18">
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white text-primary shadow-sm ring-1 ring-primary/15">
             <Icon className="h-5 w-5" {...CUTE_ICON} aria-hidden />
           </span>
           <span className="text-body font-bold leading-snug text-ink">

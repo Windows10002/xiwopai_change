@@ -254,18 +254,18 @@ export function UploadDropzone({
       return "border-[3px] border-dashed border-red-500/80 bg-red-50/90";
     }
     if (status.phase === "info") {
-      return "border-[3px] border-dashed border-primary/45 bg-gradient-to-br from-primary-tint via-white to-primary-tint/60";
+      return "border-[3px] border-dashed border-primary/60 bg-primary-tint/80";
     }
     if (status.phase === "success") {
-      return "border-[3px] border-dashed border-primary/50 bg-gradient-to-br from-primary-tint to-white";
+      return "border-[3px] border-dashed border-primary bg-primary-tint/90";
     }
     if (status.phase === "uploading") {
-      return "border-[3px] border-dashed border-primary/40 bg-white";
+      return "border-[3px] border-dashed border-primary/70 bg-white";
     }
     if (dragging) {
-      return "border-[3px] border-dashed border-primary bg-gradient-to-br from-primary-tint via-primary-light/50 to-white shadow-[0_0_0_4px_rgba(81,197,39,0.16)]";
+      return "border-[4px] border-dashed border-[#389e0d] bg-primary-tint shadow-[0_0_0_5px_rgba(82,196,26,0.22)]";
     }
-    return "border-2 border-dashed border-primary/18 bg-gradient-to-br from-white via-primary-tint/35 to-white hover:border-primary/32 hover:from-primary-tint/45";
+    return "border-2 border-dashed border-black/[0.12] bg-white hover:border-brand/40 hover:bg-brand-muted/60";
   })();
 
   const outerTabIndex = locked || (sourcePickerOpen && !busy) ? -1 : undefined;
@@ -330,7 +330,7 @@ export function UploadDropzone({
                   e.stopPropagation();
                   openFilePicker();
                 }}
-                className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 py-3 text-caption font-bold text-white shadow-sm transition hover:-translate-y-0.5 hover:bg-primary-hover"
+                className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-brand px-4 py-3 text-caption font-bold text-white shadow-sm transition hover:-translate-y-0.5 hover:bg-[#36A814]"
               >
                 <UploadCloud className="h-4 w-4" {...CUTE_ICON} aria-hidden />
                 选择图片（可多选）
@@ -341,7 +341,7 @@ export function UploadDropzone({
                   e.stopPropagation();
                   openFolderPicker();
                 }}
-                className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-primary/22 bg-gradient-to-r from-white to-primary-tint px-4 py-3 text-caption font-bold text-ink-navActive shadow-sm transition hover:-translate-y-0.5 hover:border-primary/35 hover:from-primary-tint/40"
+                className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-brand/30 bg-primary-tint px-4 py-3 text-caption font-bold text-[#006D41] shadow-sm transition hover:-translate-y-0.5 hover:border-brand/45"
               >
                 <FolderOpen className="h-4 w-4" {...CUTE_ICON} aria-hidden />
                 选择文件夹
@@ -353,7 +353,7 @@ export function UploadDropzone({
                     e.stopPropagation();
                     setSourcePickerOpen(false);
                   }}
-                  className="inline-flex min-h-9 cursor-pointer select-none items-center rounded-full border border-black/[0.1] bg-white px-5 py-2 text-caption font-semibold text-ink-muted caret-transparent outline-none shadow-sm transition hover:border-primary/30 hover:text-ink-navActive focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-2"
+                  className="inline-flex min-h-9 cursor-pointer select-none items-center rounded-full border border-black/[0.1] bg-white px-5 py-2 text-caption font-semibold text-ink-muted caret-transparent outline-none shadow-sm transition hover:border-primary/30 hover:text-[#006D41] focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-2"
                 >
                   取消
                 </button>
@@ -393,7 +393,7 @@ export function UploadDropzone({
               <div className="w-full max-w-xs space-y-2">
                 <div className="h-2.5 overflow-hidden rounded-full bg-gray-100">
                   <div
-                    className="h-full rounded-full bg-gradient-to-r from-[#51c527] via-primary to-[#9ee070] transition-[width] duration-300 ease-out"
+                    className="h-full rounded-full bg-gradient-to-r from-primary via-emerald-400 to-accent-mint transition-[width] duration-300 ease-out"
                     style={{ width: `${status.progress}%` }}
                   />
                 </div>
@@ -405,8 +405,8 @@ export function UploadDropzone({
 
           {status.phase === "success" || status.phase === "info" ? (
             <>
-              <span className="flex h-[4.25rem] w-[4.25rem] items-center justify-center rounded-full bg-white ring-4 ring-primary/12 shadow-sm">
-                <CheckCircle2 className="h-12 w-12 text-ink-navActive" {...CUTE_ICON} aria-hidden />
+              <span className="flex h-[4.25rem] w-[4.25rem] items-center justify-center rounded-full bg-primary-tint ring-4 ring-primary/15">
+                <CheckCircle2 className="h-12 w-12 text-primary" {...CUTE_ICON} aria-hidden />
               </span>
               <p className="text-body font-bold text-ink">{status.message || "识别成功，正在批改..."}</p>
               <p className="text-small text-ink-muted">{status.phase === "info" ? "点击下方开始批改，可批改整个文件夹。" : "即将为你生成得分与评语"}</p>
@@ -438,10 +438,8 @@ export function UploadDropzone({
           >
             <span
               className={[
-                "flex h-20 w-20 items-center justify-center rounded-[1.65rem] border text-ink-navActive shadow-sm transition-all duration-button ease-smooth md:h-24 md:w-24",
-                dragging
-                  ? "border-primary/35 bg-gradient-to-br from-primary-tint to-white shadow-card ring-2 ring-primary/18"
-                  : "border-primary/15 bg-white ring-1 ring-black/[0.06]",
+                "flex h-20 w-20 items-center justify-center rounded-[1.65rem] border text-brand shadow-sm transition-all duration-button ease-smooth md:h-24 md:w-24",
+                dragging ? "border-brand bg-brand-muted shadow-card ring-4 ring-primary/20" : "border-brand/25 bg-brand-muted ring-2 ring-primary/10",
               ].join(" ")}
             >
               <ImagePlus className="h-10 w-10 md:h-12 md:w-12" {...CUTE_ICON} aria-hidden />
@@ -453,7 +451,7 @@ export function UploadDropzone({
                 className={[
                   "mt-2 block rounded-tile px-3 py-2 text-caption transition-colors duration-button ease-smooth",
                   dragging
-                    ? "border border-primary/30 bg-gradient-to-r from-primary-tint to-white font-semibold text-ink-navActive"
+                    ? "border border-brand/35 bg-primary-tint font-semibold text-[#006D41]"
                     : "border border-transparent text-ink-subtle",
                 ].join(" ")}
               >
@@ -476,11 +474,9 @@ export function UploadDropzone({
                 e.stopPropagation();
                 openFilePicker();
               }}
-              className="inline-flex items-center gap-2 rounded-full bg-primary px-4 py-2 text-caption font-bold text-white shadow-sm transition hover:-translate-y-0.5 hover:bg-primary-hover"
+              className="inline-flex items-center gap-2 rounded-full bg-brand px-4 py-2 text-caption font-bold text-white shadow-sm transition hover:-translate-y-0.5 hover:bg-[#36A814]"
             >
-              <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-white/20">
-                <UploadCloud className="h-3.5 w-3.5 pointer-events-none text-white" strokeWidth={2.25} aria-hidden />
-              </span>
+              <UploadCloud className="h-4 w-4 pointer-events-none" {...CUTE_ICON} aria-hidden />
               选择图片
             </button>
             <button
@@ -489,18 +485,16 @@ export function UploadDropzone({
                 e.stopPropagation();
                 openFolderPicker();
               }}
-              className="inline-flex items-center gap-2 rounded-full border border-primary/22 bg-gradient-to-r from-white to-primary-tint px-4 py-2 text-caption font-bold text-ink-navActive shadow-sm transition hover:-translate-y-0.5 hover:border-primary/35"
+              className="inline-flex items-center gap-2 rounded-full border border-brand/25 bg-primary-tint px-4 py-2 text-caption font-bold text-[#006D41] shadow-sm transition hover:-translate-y-0.5 hover:border-brand/45"
             >
-              <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-white shadow-sm ring-1 ring-black/[0.06]">
-                <FolderOpen className="h-3.5 w-3.5 pointer-events-none text-ink-navActive" strokeWidth={2.25} aria-hidden />
-              </span>
+              <FolderOpen className="h-4 w-4 pointer-events-none" {...CUTE_ICON} aria-hidden />
               选择文件夹
             </button>
           </div>
           <div
             role="button"
             tabIndex={0}
-            className={`mt-1 flex max-w-full items-center gap-3 rounded-tile border border-primary/12 bg-gradient-to-r from-primary-tint/90 via-white to-primary-tint/70 px-3 py-2.5 text-left shadow-sm ${modalZoneClass}`}
+            className={`mt-1 flex max-w-full items-center gap-3 rounded-tile border border-black/[0.06] bg-surface-page px-3 py-2.5 text-left ${modalZoneClass}`}
             onClick={openModalFromZone}
             onKeyDown={(e) => {
               if (e.key !== "Enter" && e.key !== " ") return;

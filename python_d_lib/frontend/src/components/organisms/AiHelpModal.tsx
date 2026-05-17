@@ -62,7 +62,7 @@ export function AiHelpModal({ open, onClose }: AiHelpModalProps) {
           <ol className="space-y-4">
             {SECTIONS.map((s, i) => (
               <li key={s.title} className="rounded-2xl border border-primary/12 bg-primary-tint/50 px-4 py-3.5">
-                <p className="text-small font-bold text-ink-navActive">
+                <p className="text-small font-bold text-[#006D41]">
                   {i + 1}. {s.title}
                 </p>
                 <p className="mt-2 text-caption leading-relaxed text-ink-muted">{s.body}</p>

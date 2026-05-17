@@ -385,7 +385,7 @@ export function HomeworkPreview({
               <button
                 type="button"
                 onClick={() => setZoomOpen(true)}
-                className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-black/[0.1] bg-white px-5 py-2.5 text-small font-extrabold text-ink shadow-sm transition hover:border-primary/35 hover:text-ink-navActive"
+                className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-black/[0.1] bg-white px-5 py-2.5 text-small font-extrabold text-ink shadow-sm transition hover:border-primary/35 hover:text-[#006D41]"
               >
                 <ImageIcon className="h-5 w-5 shrink-0" {...CUTE_ICON} aria-hidden />
                 查看原图
@@ -397,7 +397,7 @@ export function HomeworkPreview({
                   "inline-flex min-h-11 items-center gap-2 rounded-xl border px-5 py-2.5 text-small font-extrabold shadow-sm transition",
                   pinned
                     ? "border-brand bg-brand text-white hover:bg-brand-hover"
-                    : "border-black/[0.1] bg-white text-ink hover:border-primary/35 hover:text-ink-navActive",
+                    : "border-black/[0.1] bg-white text-ink hover:border-primary/35 hover:text-[#006D41]",
                 ].join(" ")}
                 aria-pressed={pinned}
               >
@@ -453,7 +453,7 @@ export function HomeworkPreview({
                   <button
                     type="button"
                     onClick={() => setPinned(false)}
-                    className="rounded-full p-2 text-ink-muted transition hover:bg-primary-tint/80 hover:text-ink-navActive"
+                    className="rounded-full p-2 text-ink-muted transition hover:bg-primary-tint/80 hover:text-[#006D41]"
                     aria-label="取消置顶"
                   >
                     <PinOff className="h-4 w-4" {...CUTE_ICON} aria-hidden />

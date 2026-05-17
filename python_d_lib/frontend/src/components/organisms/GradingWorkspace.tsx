@@ -713,7 +713,7 @@ export function GradingWorkspace({
                   aria-live="polite"
                   aria-label={`${subjectLabel} · 智能批改`}
                 >
-                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white text-ink-navActive shadow-sm ring-1 ring-black/[0.08] md:h-10 md:w-10 md:rounded-xl">
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white/90 text-primary shadow-sm ring-1 ring-primary/15 md:h-10 md:w-10 md:rounded-xl">
                     <SubjectToolbarIcon className="h-4 w-4 md:h-5 md:w-5" {...CUTE_ICON} aria-hidden />
                   </span>
                   <span className="text-small font-bold leading-snug text-ink md:text-body">
@@ -749,7 +749,7 @@ export function GradingWorkspace({
               }
             />
             <div className="mt-6 grid grid-cols-1 gap-6 md:mt-8 md:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] md:gap-8 md:items-stretch">
-              <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-4 rounded-[1.35rem] border border-black/[0.06] bg-gradient-to-br from-white via-primary-tint/30 to-white/95 p-4 shadow-inner ring-1 ring-primary/10 md:h-full md:min-h-0 md:p-5">
+              <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-4 rounded-[1.35rem] border border-black/[0.06] bg-white/75 p-4 shadow-inner ring-1 ring-primary/10 md:h-full md:min-h-0 md:p-5">
                 <UploadDropzone
                   title={uploadTitle}
                   hint={combinedHint}
@@ -759,7 +759,7 @@ export function GradingWorkspace({
                 />
                 <div className="mx-auto w-full max-w-xl pt-1">
                   <PrimaryButton
-                    className="w-full min-h-[3.25rem] rounded-2xl px-8 py-3.5 text-[0.95rem] font-extrabold shadow-[0_10px_28px_rgba(81,197,39,0.24)] ring-1 ring-white/70 md:min-h-14"
+                    className="w-full min-h-[3.25rem] rounded-2xl px-8 py-3.5 text-[0.95rem] font-extrabold shadow-[0_10px_28px_rgba(82,196,26,0.22)] ring-1 ring-white/70 md:min-h-14"
                     disabled={startDisabled}
                     onClick={handleStartGrading}
                   >
@@ -771,7 +771,7 @@ export function GradingWorkspace({
                 {showWorkspaceProgress ? (
                   <div className="mx-auto w-full max-w-xl rounded-full bg-white/80 p-1 shadow-inner">
                     <div
-                      className="h-2 rounded-full bg-gradient-to-r from-[#51c527] via-primary to-[#9ee070] transition-[width] duration-300 ease-out"
+                      className="h-2 rounded-full bg-gradient-to-r from-brand via-primary to-accent-mint transition-[width] duration-300 ease-out"
                       style={{ width: `${Math.max(4, Math.min(100, progressPercent))}%` }}
                     />
                   </div>
@@ -814,7 +814,7 @@ export function GradingWorkspace({
                                   {index + 1}. {file.name}
                                 </span>
                                 {r ? (
-                                  <span className="shrink-0 tabular-nums font-black text-ink-navActive">{r.scorePercent}%</span>
+                                  <span className="shrink-0 tabular-nums font-black text-[#006D41]">{r.scorePercent}%</span>
                                 ) : err ? (
                                   <span className="shrink-0 font-semibold text-red-600">失败</span>
                                 ) : (
@@ -845,7 +845,7 @@ export function GradingWorkspace({
                                 : batchErrors[index]
                                   ? "border-red-200 bg-red-50 text-red-600 hover:border-red-300"
                                   : batchResults[index]
-                                    ? "border-emerald-200 bg-emerald-50 text-ink-navActive hover:border-brand/40"
+                                    ? "border-emerald-200 bg-emerald-50 text-[#006D41] hover:border-brand/40"
                                     : "border-black/[0.08] bg-surface-page text-ink-muted hover:border-brand/40 hover:text-brand",
                             ].join(" ")}
                           >
@@ -947,7 +947,7 @@ export function GradingWorkspace({
                           <div className="min-w-0 flex-1">
                             <div className="flex items-start justify-between gap-2">
                               <p className="min-w-0 flex-1 truncate text-small font-bold text-ink">{row.entry.fileName}</p>
-                              <span className="shrink-0 rounded-full bg-white px-2.5 py-0.5 text-[0.65rem] font-black text-ink-navActive ring-1 ring-primary/20">
+                              <span className="shrink-0 rounded-full bg-white px-2.5 py-0.5 text-[0.65rem] font-black text-[#006D41] ring-1 ring-primary/20">
                                 {row.entry.detail.scorePercent}%
                               </span>
                             </div>
@@ -972,10 +972,10 @@ export function GradingWorkspace({
                     ) : (
                       <li key={row.groupKey} className="rounded-2xl border border-brand/25 bg-primary-tint/40 p-3 shadow-sm ring-1 ring-primary/12">
                         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-black/[0.06] pb-2">
-                          <p className="text-small font-extrabold text-ink-navActive">
+                          <p className="text-small font-extrabold text-[#006D41]">
                             {row.groupName ? `${row.groupName} · ${row.items.length} 张` : `文件夹批改 · ${row.items.length} 张`}
                           </p>
-                          <span className="shrink-0 rounded-full bg-white px-2.5 py-0.5 text-[0.65rem] font-black text-ink-navActive ring-1 ring-primary/20">
+                          <span className="shrink-0 rounded-full bg-white px-2.5 py-0.5 text-[0.65rem] font-black text-[#006D41] ring-1 ring-primary/20">
                             均分{" "}
                             {Math.round(row.items.reduce((s, i) => s + i.detail.scorePercent, 0) / row.items.length)}%
                           </span>
@@ -995,7 +995,7 @@ export function GradingWorkspace({
                                   <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-surface-page text-[0.55rem] text-ink-muted">无图</div>
                                 )}
                                 <span className="min-w-0 flex-1 truncate text-caption font-semibold text-ink">{h.fileName}</span>
-                                <span className="shrink-0 text-[0.65rem] font-bold text-ink-navActive">{h.detail.scorePercent}%</span>
+                                <span className="shrink-0 text-[0.65rem] font-bold text-[#006D41]">{h.detail.scorePercent}%</span>
                               </button>
                             </li>
                           ))}
