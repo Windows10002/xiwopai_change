@@ -16,9 +16,11 @@ export function glassOpacityToCssVars(opacity: number): Record<string, string> {
   const border = 0.22 + p * 0.48;
   const ring = 0.12 + p * 0.52;
   const blurPx = Math.round(6 + p * 18);
+  const scrim = 0.04 + p * 0.32;
   return {
     "--glass-panel-alpha": panel.toFixed(3),
     "--glass-inner-alpha": inner.toFixed(3),
+    "--glass-scrim-alpha": scrim.toFixed(3),
     "--glass-tint-alpha": tint.toFixed(3),
     "--glass-tint-warm-alpha": warm.toFixed(3),
     "--glass-border-alpha": border.toFixed(3),

@@ -306,7 +306,7 @@ export function UploadDropzone({
     >
       {sourcePickerOpen && !busy ? (
         <div
-          className="absolute inset-0 z-20 flex select-none items-center justify-center overflow-y-auto rounded-card bg-white/50 px-3 py-5 backdrop-blur-md sm:px-4 sm:py-6"
+          className="glass-scrim absolute inset-0 z-20 flex select-none items-center justify-center overflow-y-auto rounded-card px-3 py-5 sm:px-4 sm:py-6"
           role="dialog"
           aria-modal="true"
           aria-label="选择添加方式"
@@ -341,7 +341,7 @@ export function UploadDropzone({
                   e.stopPropagation();
                   openFolderPicker();
                 }}
-                className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-white/45 bg-white/40 px-4 py-3 text-caption font-bold text-[#51c527] shadow-sm backdrop-blur-sm transition hover:-translate-y-0.5 hover:border-primary/30 hover:bg-white/55"
+                className="glass-surface inline-flex w-full items-center justify-center gap-2 rounded-xl px-4 py-3 text-caption font-bold text-[#51c527] shadow-sm transition hover:-translate-y-0.5 hover:border-primary/30"
               >
                 <FolderOpen className="h-4 w-4" {...CUTE_ICON} aria-hidden />
                 选择文件夹
@@ -353,7 +353,7 @@ export function UploadDropzone({
                     e.stopPropagation();
                     setSourcePickerOpen(false);
                   }}
-                  className="inline-flex min-h-9 cursor-pointer select-none items-center rounded-full border border-white/45 bg-white/40 px-5 py-2 text-caption font-semibold text-ink-muted caret-transparent outline-none shadow-sm backdrop-blur-sm transition hover:border-primary/30 hover:bg-white/55 hover:text-[#006D41] focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-2"
+                  className="glass-surface inline-flex min-h-9 cursor-pointer select-none items-center rounded-full px-5 py-2 text-caption font-semibold text-ink-muted caret-transparent outline-none shadow-sm transition hover:border-primary/30 hover:text-[#006D41] focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-2"
                 >
                   取消
                 </button>
