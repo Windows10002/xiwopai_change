@@ -1,0 +1,31 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Flask: app.py (py310)",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/app.py",
+      "python": "E:\\APP_Data\\anaconda3\\envs\\py310\\python.exe",
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "justMyCode": true
+    },
+    {
+      "name": "Frontend: Vite dev (hot reload)",
+      "type": "node",
+      "request": "launch",
+      "runtimeExecutable": "E:\\APP\\nodejs\\npm.cmd",
+      "runtimeArgs": ["run", "dev", "--", "--host"],
+      "cwd": "${workspaceFolder}/frontend",
+      "console": "integratedTerminal"
+    }
+  ],
+  "compounds": [
+    {
+      "name": "Full stack: Vite + Flask",
+      "configurations": ["Flask: app.py (py310)", "Frontend: Vite dev (hot reload)"],
+      "stopAll": true
+    }
+  ]
+}

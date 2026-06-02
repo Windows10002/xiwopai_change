@@ -1,0 +1,50 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Frontend: npm install",
+      "type": "shell",
+      "command": "npm install",
+      "options": {
+        "cwd": "${workspaceFolder}/frontend",
+        "env": {
+          "PATH": "E:\\APP\\nodejs;${env:PATH}"
+        }
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Frontend: build (dist)",
+      "type": "shell",
+      "command": "npm run build",
+      "options": {
+        "cwd": "${workspaceFolder}/frontend",
+        "env": {
+          "PATH": "E:\\APP\\nodejs;${env:PATH}"
+        }
+      },
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "problemMatcher": ["$tsc"]
+    },
+    {
+      "label": "Backend: Flask (app.py)",
+      "type": "shell",
+      "command": "E:\\APP_Data\\anaconda3\\envs\\py310\\python.exe",
+      "args": ["app.py"],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "isBackground": true,
+      "problemMatcher": []
+    },
+    {
+      "label": "Full: build frontend + start Flask",
+      "dependsOn": ["Frontend: build (dist)", "Backend: Flask (app.py)"],
+      "dependsOrder": "sequence",
+      "problemMatcher": []
+    }
+  ]
+}
