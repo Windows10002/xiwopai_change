@@ -18,6 +18,9 @@ const ClassAnalyticsPage = lazy(() =>
 const FeedbackDashboardPage = lazy(() =>
   import("@/pages/FeedbackDashboardPage").then((m) => ({ default: m.FeedbackDashboardPage })),
 );
+const MyWorkPage = lazy(() => import("@/pages/MyWorkPage").then((m) => ({ default: m.MyWorkPage })));
+const TodoPage = lazy(() => import("@/pages/TodoPage").then((m) => ({ default: m.TodoPage })));
+const WorkspacePage = lazy(() => import("@/pages/WorkspacePage").then((m) => ({ default: m.WorkspacePage })));
 
 function PageFallback() {
   return (
@@ -94,6 +97,36 @@ export default function App() {
             <Lazy>
               <ProtectedRoleRoute anyOf={["feedback.dashboard"]}>
                 <FeedbackDashboardPage />
+              </ProtectedRoleRoute>
+            </Lazy>
+          }
+        />
+        <Route
+          path="/my-work"
+          element={
+            <Lazy>
+              <ProtectedRoleRoute anyOf={["workspace.view_own"]}>
+                <MyWorkPage />
+              </ProtectedRoleRoute>
+            </Lazy>
+          }
+        />
+        <Route
+          path="/todo"
+          element={
+            <Lazy>
+              <ProtectedRoleRoute anyOf={["workspace.view_own", "workspace.submit"]}>
+                <TodoPage />
+              </ProtectedRoleRoute>
+            </Lazy>
+          }
+        />
+        <Route
+          path="/workspace"
+          element={
+            <Lazy>
+              <ProtectedRoleRoute anyOf={["workspace.manage"]}>
+                <WorkspacePage />
               </ProtectedRoleRoute>
             </Lazy>
           }

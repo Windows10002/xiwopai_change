@@ -1,3 +1,5 @@
+import { loadStudentProfileName } from "@/lib/studentProfileName";
+
 const TOKEN_KEY = "seewo_pi_auth_token_v1";
 
 export function loadAuthToken(): string | null {
@@ -23,6 +25,8 @@ export async function apiFetch(input: RequestInfo | URL, init?: RequestInit): Pr
   const token = loadAuthToken();
   const headers = new Headers(init?.headers);
   if (token) headers.set("Authorization", `Bearer ${token}`);
+  const studentName = loadStudentProfileName();
+  if (studentName) headers.set("X-Student-Name", studentName);
   if (init?.body && !(init.body instanceof FormData) && !headers.has("Content-Type")) {
     headers.set("Content-Type", "application/json");
   }
@@ -34,6 +38,13 @@ export async function parseApiJson<T extends ApiJson>(res: Response): Promise<T>
   try {
     json = (await res.json()) as T;
   } catch {
+    if (res.status === 404) {
+      throw new Error("接口不存在（404）。请 Ctrl+C 停掉所有旧后端后重新运行 .\\run-conda.ps1。");
+    }
+    const ct = res.headers.get("content-type") ?? "";
+    if (ct.includes("text/html")) {
+      throw new Error("后端返回了网页而非 JSON。请确认只运行一个 Flask 实例并已重新 build 前端。");
+    }
     throw new Error("服务器返回了非 JSON 数据，请确认后端已启动。");
   }
   if (!res.ok || json.ok === false) {

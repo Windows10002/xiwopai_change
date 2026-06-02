@@ -5,7 +5,7 @@ import logging
 
 from flask import Flask
 
-from core.config import FLASK_DEBUG, FLASK_PORT, GRADING_DISPUTES_DB, MAX_UPLOAD_BYTES, SECRET_KEY, UPLOAD_FOLDER
+from core.config import FLASK_DEBUG, FLASK_PORT, GRADING_DISPUTES_DB, MAX_UPLOAD_BYTES, SECRET_KEY, UPLOAD_FOLDER, WORKSPACE_DB
 from core.logging_config import setup_logging
 
 logger = logging.getLogger(__name__)
@@ -28,6 +28,14 @@ def create_app() -> Flask:
         app.config["DISPUTES_STORE"] = None
         logger.warning("DisputesStore not loaded")
 
+    try:
+        from core.workspace_service import WorkspaceStore
+
+        app.config["WORKSPACE_STORE"] = WorkspaceStore(WORKSPACE_DB)
+    except ImportError:
+        app.config["WORKSPACE_STORE"] = None
+        logger.warning("WorkspaceStore not loaded")
+
     from routes.api_auth import auth_bp
     from routes.api_disputes import disputes_bp
     from routes.api_feedback import feedback_bp
@@ -35,9 +43,10 @@ def create_app() -> Flask:
     from routes.api_health import health_bp
     from routes.api_insights import insights_bp
     from routes.api_uploads import uploads_bp
+    from routes.api_workspace import workspace_bp
     from routes.spa import spa_bp
 
-    for bp in (auth_bp, grade_bp, feedback_bp, insights_bp, disputes_bp, health_bp, uploads_bp, spa_bp):
+    for bp in (auth_bp, grade_bp, feedback_bp, insights_bp, disputes_bp, workspace_bp, health_bp, uploads_bp, spa_bp):
         app.register_blueprint(bp)
 
     return app

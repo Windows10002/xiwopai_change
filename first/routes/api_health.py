@@ -15,7 +15,11 @@ health_bp = Blueprint("health", __name__)
 @require_auth(optional=True)
 def api_health():
     user = current_user()
-    basic = {"ok": True, "spa_built": spa_built()}
+    basic = {
+        "ok": True,
+        "spa_built": spa_built(),
+        "workspace_loaded": current_app.config.get("WORKSPACE_STORE") is not None,
+    }
     if not user or not has_permission(str(user.get("role", "")), "health.detail"):
         return jsonify(basic)
 

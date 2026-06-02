@@ -17,6 +17,7 @@ UPLOAD_FOLDER = BASE_DIR / "uploads"
 FRONTEND_DIST = BASE_DIR / "frontend" / "dist"
 GRADING_FEEDBACK_LOG = BASE_DIR / "grading_feedback.jsonl"
 GRADING_DISPUTES_DB = BASE_DIR / "grading_disputes.db"
+WORKSPACE_DB = BASE_DIR / "workspace.db"
 
 ALLOWED_UPLOAD_EXT = {".jpg", ".jpeg", ".png", ".webp", ".bmp", ".gif"}
 MAX_UPLOAD_BYTES = int(os.getenv("MAX_UPLOAD_BYTES", str(15 * 1024 * 1024)))

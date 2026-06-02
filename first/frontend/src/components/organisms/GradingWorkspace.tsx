@@ -40,6 +40,8 @@ import type { BatchInsightsResponse } from "@/lib/gradingBatchInsights";
 import { saveUserPreferences } from "@/lib/userPreferences";
 import { checkImageQuality } from "@/lib/imageQualityCheck";
 import { rememberStudentFromGrading } from "@/lib/studentRoster";
+import { loadStudentProfileName } from "@/lib/studentProfileName";
+import { publishSubmissionToStudent } from "@/lib/workspaceApi";
 import { canManageGrading } from "@/lib/rolePermissions";
 import { useUserPreferences } from "@/hooks/useUserPreferences";
 import { CUTE_ICON } from "@/components/atoms/cuteIcon";
@@ -126,12 +128,16 @@ export function GradingWorkspace({
   const [serverImageUrlByIndex, setServerImageUrlByIndex] = useState<Record<number, string>>({});
   /** 与 historyIdByIndexRef 同步：本地历史 IndexedDB id */
   const [historyEntryIdByIndex, setHistoryEntryIdByIndex] = useState<Record<number, string>>({});
+  const [submissionIdByIndex, setSubmissionIdByIndex] = useState<Record<number, string>>({});
+  const [publishedByIndex, setPublishedByIndex] = useState<Record<number, boolean>>({});
+  const [workspaceToast, setWorkspaceToast] = useState<string | null>(null);
 
   const previewUrlRef = useRef<string | null>(null);
   /** 批量批改时各张图对应的服务端预览路径（用于刷新后恢复、切换缩略图） */
   const serverPreviewByIndexRef = useRef<Record<number, string>>({});
   /** 各张图对应历史记录 id（IndexedDB 原图），用于刷新后恢复预览 */
   const historyIdByIndexRef = useRef<Record<number, string>>({});
+  const submissionIdByIndexRef = useRef<Record<number, string>>({});
   /** 当前待批改的本地文件，提交给 `/api/grade` */
   const pendingFileRef = useRef<File | null>(null);
   /** 选图后、老师确认弹窗前暂存的图片列表 */
@@ -430,13 +436,27 @@ export function GradingWorkspace({
         }, 240);
 
         try {
-          const { detail, imageUrl } = await submitGrade(file, subject, {
+          const wsStudentName =
+            canManage || session?.role === "parent"
+              ? studentName.trim()
+              : session?.role === "student"
+                ? loadStudentProfileName()
+                : "";
+          const { detail, imageUrl, submissionId, published } = await submitGrade(file, subject, {
             gradeLevel: teacherGradeLevel.trim() || undefined,
             teacherNote: teacherNote.trim() || undefined,
             essayPromptText: subject === "english" ? essayPromptText.trim() || undefined : undefined,
             essayPromptFile: subject === "english" ? essayPromptFileRef.current ?? undefined : undefined,
+            studentName: wsStudentName || undefined,
+            saveToWorkspace: Boolean(wsStudentName),
+            publishToStudent: session?.role === "student" && Boolean(wsStudentName),
           });
           nextResults[index] = detail;
+          if (submissionId) {
+            submissionIdByIndexRef.current[index] = submissionId;
+            setSubmissionIdByIndex((prev) => ({ ...prev, [index]: submissionId }));
+            setPublishedByIndex((prev) => ({ ...prev, [index]: Boolean(published) }));
+          }
           setBatchResults([...nextResults]);
           setResult(detail);
           if (imageUrl) {
@@ -547,6 +567,7 @@ export function GradingWorkspace({
     selectedFiles,
     studentName,
     subject,
+    session?.role,
     teacherGradeLevel,
     teacherNote,
   ]);
@@ -672,6 +693,22 @@ export function GradingWorkspace({
   const startButtonText = selectedFiles.length > 1 ? `开始批改整个文件夹（${selectedFiles.length} 张）` : "开始批改";
   const batchSuccessCount = batchResults.filter(Boolean).length;
   const batchFailCount = batchErrors.filter(Boolean).length;
+
+  const currentSubmissionId = submissionIdByIndex[currentFileIndex];
+  const currentPublished = publishedByIndex[currentFileIndex];
+
+  const handlePublishToStudent = useCallback(async () => {
+    const id = submissionIdByIndexRef.current[currentFileIndex];
+    if (!id) return;
+    try {
+      await publishSubmissionToStudent(id);
+      setPublishedByIndex((prev) => ({ ...prev, [currentFileIndex]: true }));
+      setWorkspaceToast("已发送给学生，对方可在「我的作业」查看");
+      window.setTimeout(() => setWorkspaceToast(null), 4500);
+    } catch (e) {
+      setWorkspaceToast(e instanceof Error ? e.message : "发送失败");
+    }
+  }, [currentFileIndex]);
 
   const historyForSubject = useMemo(() => historyItems.filter((h) => h.subject === subject), [historyItems, subject]);
   const historyRows = useMemo(() => buildGroupedHistoryRows(historyForSubject), [historyForSubject]);
@@ -861,6 +898,25 @@ export function GradingWorkspace({
               </span>
               <span className="font-normal text-ink-muted">上传前请填写孩子姓名；结果保存在本机，不可改分或申诉审核</span>
             </p>
+          ) : null}
+          {canManage && step >= 3 && currentSubmissionId && !currentPublished ? (
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-primary/25 bg-primary-tint/70 px-4 py-3">
+              <p className="text-small font-semibold text-ink">
+                批改已保存至作业管理
+                {studentName.trim() ? `（${studentName.trim()}）` : ""}，确认无误后发送给学生。
+              </p>
+              <PrimaryButton className="min-h-10 shrink-0 px-5 text-caption" onClick={() => void handlePublishToStudent()}>
+                发送给学生
+              </PrimaryButton>
+            </div>
+          ) : null}
+          {canManage && step >= 3 && currentSubmissionId && currentPublished ? (
+            <p className="mb-4 rounded-2xl border border-emerald-200 bg-emerald-50/90 px-4 py-2.5 text-center text-caption font-semibold text-emerald-900">
+              已发送给学生 · 可在「作业管理 → 作业收发」继续推送变式题或验收订正
+            </p>
+          ) : null}
+          {workspaceToast ? (
+            <p className="mb-4 rounded-xl bg-ink px-4 py-2 text-center text-caption font-semibold text-white">{workspaceToast}</p>
           ) : null}
 
           <div key={step} className={isStudentUi ? "animate-step-flow min-w-0 max-w-full" : "min-w-0 max-w-full"}>

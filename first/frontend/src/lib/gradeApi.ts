@@ -8,6 +8,9 @@ type ApiGradePayload = {
   subject?: string;
   image_url?: string;
   result?: Record<string, unknown>;
+  submission_id?: string;
+  grading_record_id?: string;
+  published?: boolean;
 };
 
 function truncate(s: string, max: number): string {
@@ -415,6 +418,11 @@ export type GradeRequestContext = {
   essayPromptFile?: File;
   /** 可选：取消长时间批改 */
   signal?: AbortSignal;
+  /** 闭环：学生姓名 */
+  studentName?: string;
+  assignmentId?: string;
+  saveToWorkspace?: boolean;
+  publishToStudent?: boolean;
 };
 
 const GRADE_TIMEOUT_MS = 5 * 60 * 1000;
@@ -429,6 +437,8 @@ export async function submitGrade(
 ): Promise<{
   detail: GradingResultDetail;
   imageUrl: string;
+  submissionId?: string;
+  published?: boolean;
 }> {
   const body = new FormData();
   body.append("file", file);
@@ -436,9 +446,14 @@ export async function submitGrade(
   const gl = ctx?.gradeLevel?.trim();
   const tn = ctx?.teacherNote?.trim();
   const ep = ctx?.essayPromptText?.trim();
+  const sn = ctx?.studentName?.trim();
   if (gl) body.append("grade_level", gl);
   if (tn) body.append("teacher_note", tn);
   if (ep) body.append("essay_prompt", ep);
+  if (sn) body.append("student_name", sn);
+  if (ctx?.assignmentId) body.append("assignment_id", ctx.assignmentId);
+  if (ctx?.saveToWorkspace) body.append("save_to_workspace", "1");
+  if (ctx?.publishToStudent) body.append("publish_to_student", "1");
   if (ctx?.essayPromptFile) body.append("prompt_file", ctx.essayPromptFile);
 
   const controller = new AbortController();
@@ -462,7 +477,12 @@ export async function submitGrade(
     const detail = mapApiResultToDetail(subject, raw as Record<string, unknown>);
     detail.scoringStrategyDetail = buildScoringStrategyDetail(subject, detail);
     const imageUrl = json.image_url || "";
-    return { detail, imageUrl };
+    return {
+      detail,
+      imageUrl,
+      submissionId: json.submission_id,
+      published: json.published,
+    };
   } catch (e) {
     if (e instanceof DOMException && e.name === "AbortError") {
       throw new Error("批改已取消或超时，请重试。");

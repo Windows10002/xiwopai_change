@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { BookMarked, Sparkles } from "lucide-react";
+import { BookMarked, ClipboardList, Sparkles } from "lucide-react";
 import { useUserPreferences } from "@/hooks/useUserPreferences";
 import { Navbar } from "@/components/atoms/Navbar";
 import { FabHelp } from "@/components/atoms/FabHelp";
@@ -85,8 +85,37 @@ export function HomePageStudent() {
             </div>
 
             <Link
+              to="/todo"
+              className="campus-banner-strip animate-fade-up-in stagger-3 mx-auto mt-6 flex max-w-2xl items-center justify-center gap-2 transition hover:border-primary/40 hover:shadow-md"
+            >
+              <ClipboardList className="h-4 w-4 shrink-0 text-primary" {...CUTE_ICON} aria-hidden />
+              <span>待办任务</span>
+              <span className="text-ink-subtle" aria-hidden>
+                ·
+              </span>
+              <span className="text-ink-muted">完成教师布置的作业</span>
+            </Link>
+
+            <Link
+              to="/my-work"
+              className="campus-banner-strip animate-fade-up-in stagger-3 mx-auto mt-3 flex max-w-2xl items-center justify-center gap-2 transition hover:border-primary/40 hover:shadow-md"
+            >
+              <BookMarked className="h-4 w-4 shrink-0 text-primary" {...CUTE_ICON} aria-hidden />
+              <span>我的作业</span>
+              {wrongCount > 0 ? (
+                <span className="rounded-full bg-primary px-2 py-0.5 text-[0.65rem] font-black text-white">
+                  {wrongCount}
+                </span>
+              ) : null}
+              <span className="text-ink-subtle" aria-hidden>
+                ·
+              </span>
+              <span className="text-ink-muted">查看教师下发的批改结果</span>
+            </Link>
+
+            <Link
               to="/wrong-book"
-              className="campus-banner-strip animate-fade-up-in stagger-3 mx-auto mt-8 flex max-w-2xl items-center justify-center gap-2 transition hover:border-primary/40 hover:shadow-md"
+              className="campus-banner-strip animate-fade-up-in stagger-3 mx-auto mt-3 flex max-w-2xl items-center justify-center gap-2 transition hover:border-primary/40 hover:shadow-md"
             >
               <BookMarked className="h-4 w-4 shrink-0 text-primary" {...CUTE_ICON} aria-hidden />
               <span>我的错题本</span>

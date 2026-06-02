@@ -77,6 +77,9 @@ export function Navbar({
   const showClass = hasPermission(session, "analytics.class");
   const showFeedback = hasPermission(session, "feedback.dashboard");
   const showWrongBook = hasPermission(session, "wrong_book");
+  const showMyWork = hasPermission(session, "workspace.view_own");
+  const showTodo = hasPermission(session, "workspace.submit");
+  const showWorkspace = hasPermission(session, "workspace.manage");
   const showDisputeBadge = hasPermission(session, "disputes.review");
 
   useEffect(() => {
@@ -119,6 +122,9 @@ export function Navbar({
           {showAnalytics ? <NavItem to="/student-analytics">学生学情</NavItem> : null}
           {showClass ? <NavItem to="/class-analytics">班级看板</NavItem> : null}
           {showFeedback ? <NavItem to="/feedback-dashboard">反馈看板</NavItem> : null}
+          {showWorkspace ? <NavItem to="/workspace">作业管理</NavItem> : null}
+          {showTodo ? <NavItem to="/todo">待办</NavItem> : null}
+          {showMyWork ? <NavItem to="/my-work">我的作业</NavItem> : null}
           {showWrongBook ? (
             <NavLink
               to="/wrong-book"

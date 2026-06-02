@@ -24,6 +24,7 @@ import {
   removeRosterStudent,
   type RosterStudent,
 } from "@/lib/studentRoster";
+import { loadStudentProfileName, saveStudentProfileName } from "@/lib/studentProfileName";
 import { loadNoteTemplates, saveNoteTemplates } from "@/lib/teacherNoteTemplates";
 import { hasPermission, ROLE_LABEL } from "@/lib/rolePermissions";
 
@@ -75,6 +76,35 @@ function PrefToggle({
 function applyPrefs(partial: Partial<UserPreferences>) {
   const next = saveUserPreferences(partial);
   syncUserPreferencesToDom(next);
+}
+
+function StudentProfileNameField() {
+  const [name, setName] = useState(() => loadStudentProfileName());
+  const [saved, setSaved] = useState(false);
+  return (
+    <div className="flex flex-wrap gap-2">
+      <input
+        value={name}
+        onChange={(e) => {
+          setName(e.target.value.slice(0, 32));
+          setSaved(false);
+        }}
+        placeholder="例如：张三"
+        className="min-h-10 min-w-[10rem] flex-1 rounded-lg border border-black/[0.1] px-3 text-small"
+      />
+      <button
+        type="button"
+        onClick={() => {
+          saveStudentProfileName(name);
+          setSaved(true);
+        }}
+        className="min-h-10 rounded-lg bg-brand px-4 text-small font-bold text-white"
+      >
+        保存
+      </button>
+      {saved ? <span className="self-center text-caption font-semibold text-emerald-700">已保存</span> : null}
+    </div>
+  );
 }
 
 function TeacherRosterSection() {
@@ -259,10 +289,39 @@ export function SettingsPage() {
                 </>
               ) : null}
               {hasPermission(sessionInfo, "disputes.review") ? <TeacherGradingDisputePanel /> : null}
+              {hasPermission(sessionInfo, "workspace.manage") ? (
+                <PrefSection title="作业管理" desc="发布任务、收发作业、推送变式题与验收订正。">
+                  <Link
+                    to="/workspace"
+                    className="inline-flex min-h-11 items-center justify-center rounded-xl border border-violet-200 bg-violet-50 px-4 text-small font-bold text-violet-950"
+                  >
+                    打开作业管理
+                  </Link>
+                </PrefSection>
+              ) : null}
             </>
           ) : null}
           {sessionInfo?.role === "student" ? (
             <>
+              <PrefSection title="我的姓名" desc="须与教师批改/任务中填写的姓名一致，用于接收作业与变式题。">
+                <StudentProfileNameField />
+              </PrefSection>
+              <PrefSection title="作业与任务" desc="教师布置的任务与下发的批改结果。">
+                <div className="flex flex-wrap gap-2">
+                  <Link
+                    to="/todo"
+                    className="inline-flex min-h-11 items-center justify-center rounded-xl border border-primary/25 bg-primary-tint/80 px-4 text-small font-bold text-ink-navActive"
+                  >
+                    待办任务
+                  </Link>
+                  <Link
+                    to="/my-work"
+                    className="inline-flex min-h-11 items-center justify-center rounded-xl border border-primary/25 bg-white px-4 text-small font-bold text-ink"
+                  >
+                    我的作业
+                  </Link>
+                </div>
+              </PrefSection>
               <PrefSection title="错题本" desc="自动收录批改中的错题，便于课后复习。">
                 <Link
                   to="/wrong-book"

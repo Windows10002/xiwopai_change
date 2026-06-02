@@ -13,7 +13,7 @@ VALID_ROLES = frozenset({"parent", "student", "teacher", "admin"})
 
 ROLE_PERMISSIONS: dict[str, frozenset[str]] = {
     "parent": frozenset({"grading.access"}),
-    "student": frozenset({"grading.access", "disputes.submit"}),
+    "student": frozenset({"grading.access", "disputes.submit", "workspace.view_own", "workspace.submit"}),
     "teacher": frozenset(
         {
             "grading.access",
@@ -22,6 +22,7 @@ ROLE_PERMISSIONS: dict[str, frozenset[str]] = {
             "disputes.review",
             "analytics",
             "health.detail",
+            "workspace.manage",
         }
     ),
     "admin": frozenset(
@@ -32,6 +33,7 @@ ROLE_PERMISSIONS: dict[str, frozenset[str]] = {
             "disputes.review",
             "analytics",
             "health.detail",
+            "workspace.manage",
         }
     ),
 }
@@ -79,6 +81,18 @@ def get_bearer_token() -> str | None:
 
 def current_user() -> dict[str, Any] | None:
     return getattr(g, "current_user", None)
+
+
+def resolve_student_profile_name(user: dict[str, Any] | None, header_value: str | None = None) -> str:
+    """演示环境：学生姓名来自请求头或令牌字段，用于师生数据匹配。"""
+    if not user:
+        return ""
+    from flask import request
+
+    hdr = (header_value or request.headers.get("X-Student-Name") or "").strip()
+    if hdr:
+        return hdr[:80]
+    return str(user.get("student_name") or "").strip()[:80]
 
 
 def require_auth(*, optional: bool = False):

@@ -11,11 +11,14 @@ export type Permission =
   | "disputes.submit"
   | "disputes.review"
   | "roster.manage"
-  | "export.full";
+  | "export.full"
+  | "workspace.view_own"
+  | "workspace.submit"
+  | "workspace.manage";
 
 const ROLE_PERMISSIONS: Record<AppUserRole, ReadonlySet<Permission>> = {
   parent: new Set(["grading.access"]),
-  student: new Set(["grading.access", "wrong_book", "disputes.submit"]),
+  student: new Set(["grading.access", "wrong_book", "disputes.submit", "workspace.view_own", "workspace.submit"]),
   teacher: new Set([
     "grading.access",
     "grading.manage",
@@ -25,6 +28,7 @@ const ROLE_PERMISSIONS: Record<AppUserRole, ReadonlySet<Permission>> = {
     "disputes.review",
     "roster.manage",
     "export.full",
+    "workspace.manage",
   ]),
   admin: new Set([
     "grading.access",
@@ -35,6 +39,7 @@ const ROLE_PERMISSIONS: Record<AppUserRole, ReadonlySet<Permission>> = {
     "disputes.review",
     "roster.manage",
     "export.full",
+    "workspace.manage",
   ]),
 };
 
@@ -77,6 +82,9 @@ export function deniedMessage(perm: Permission): string {
     "disputes.submit": "判题申诉仅学生端可提交",
     "roster.manage": "学生名册仅教师端与教务端可管理",
     "export.full": "完整导出仅教师端与教务端可用",
+    "workspace.view_own": "我的作业仅学生端可用",
+    "workspace.submit": "提交任务作业需学生端登录",
+    "workspace.manage": "任务与收发仅教师端与教务端可用",
   };
   return map[perm] ?? "当前身份无此功能权限";
 }
