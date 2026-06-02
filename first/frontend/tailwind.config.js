@@ -28,9 +28,9 @@ const palette = {
   surfacePage: "#F5F7FA",
   surfaceCard: "#FFFFFF",
 
-  /** 「演示」角标 */
-  badgeDemoBg: "#EDF6E5",
-  badgeDemoFg: "#5C6F3A",
+  /** 「演示」角标 · 品牌绿底白字 */
+  badgeDemoBg: "#52C41A",
+  badgeDemoFg: "#FFFFFF",
 };
 
 /** @type {import('tailwindcss').Config} */

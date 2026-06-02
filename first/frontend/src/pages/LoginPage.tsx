@@ -6,15 +6,15 @@ import { IpMascotWaveWelcome } from "@/components/atoms/IpMascot";
 import { loginApi, saveAuthToken } from "@/lib/apiClient";
 import type { AppUserRole } from "@/lib/appSession";
 import {
-  GRADING_MIN_GRADE,
-  GUARDIAN_DEMO_PASSPHRASE,
   newGuardianAllowanceExpiry,
   saveSession,
   studentNeedsGuardianApproval,
 } from "@/lib/appSession";
+import { DemoAccountsPopover } from "@/components/molecules/DemoAccountsPopover";
+import { findDemoAccount } from "@/lib/demoAccounts";
+import { saveStudentProfileName } from "@/lib/studentProfileName";
 
-/** 演示用账号提示（实际校验在后端） */
-const DEMO_ACCOUNT = "13800138000";
+/** 演示用密码（实际校验在后端） */
 const DEMO_PASSWORD = "123456";
 
 const GRADE_OPTIONS = Array.from({ length: 12 }, (_, i) => {
@@ -70,6 +70,16 @@ export function LoginPage() {
   const [globalError, setGlobalError] = useState("");
   const [status, setStatus] = useState<"idle" | "loading" | "success">("idle");
   const [loginRole, setLoginRole] = useState<AppUserRole>("teacher");
+  const [backendStale, setBackendStale] = useState(false);
+
+  useEffect(() => {
+    void fetch("/api/auth/config")
+      .then((r) => r.json())
+      .then((j: { demo_accounts?: unknown[] }) => {
+        setBackendStale(!Array.isArray(j.demo_accounts) || j.demo_accounts.length < 5);
+      })
+      .catch(() => setBackendStale(true));
+  }, []);
 
   useEffect(() => {
     const r = new URLSearchParams(location.search).get("role");
@@ -120,15 +130,36 @@ export function LoginPage() {
       saveAuthToken(data.token, remember);
       setStatus("success");
 
-      if (loginRole === "teacher") {
-        saveSession({ role: "teacher", studentGrade: null, gradingAllowanceExpiresAt: 0 }, remember);
-      } else if (loginRole === "parent") {
-        saveSession({ role: "parent", studentGrade: null, gradingAllowanceExpiresAt: 0 }, remember);
-      } else if (loginRole === "admin") {
-        saveSession({ role: "admin", studentGrade: null, gradingAllowanceExpiresAt: 0 }, remember);
-      } else {
-        const allowance = studentNeedsGuardianApproval(studentGrade) ? newGuardianAllowanceExpiry() : 0;
-        saveSession({ role: "student", studentGrade, gradingAllowanceExpiresAt: allowance }, remember);
+      const role = (data.role as AppUserRole) || loginRole;
+      const grade =
+        role === "student"
+          ? typeof data.student_grade === "number"
+            ? data.student_grade
+            : studentGrade
+          : null;
+      const displayName =
+        (typeof data.display_name === "string" ? data.display_name : undefined) ??
+        findDemoAccount(account.trim())?.displayName;
+      const teachingGrades =
+        (typeof data.teaching_grades === "string" ? data.teaching_grades : undefined) ??
+        findDemoAccount(account.trim())?.teachingGrades;
+      const allowance =
+        role === "student" && grade != null && studentNeedsGuardianApproval(grade) ? newGuardianAllowanceExpiry() : 0;
+
+      saveSession(
+        {
+          role,
+          studentGrade: grade,
+          gradingAllowanceExpiresAt: allowance,
+          displayName,
+          teachingGrades,
+          loginAccount: account.trim(),
+        },
+        remember,
+      );
+
+      if (role === "student" && displayName) {
+        saveStudentProfileName(displayName, remember);
       }
 
       const nextRaw = new URLSearchParams(location.search).get("redirect");
@@ -183,16 +214,31 @@ export function LoginPage() {
         <section className="flex w-full flex-1 flex-col justify-center px-4 pb-20 pt-2 sm:px-8 lg:w-[54%] lg:px-10 lg:pb-14 lg:pt-8">
           <div className="mx-auto w-full max-w-md rounded-[18px] bg-white/95 px-6 py-9 shadow-[0_12px_48px_rgba(15,45,35,0.08),0_4px_16px_rgba(143,217,193,0.12)] ring-1 ring-[#FEF9C3]/70 ring-offset-2 ring-offset-[#f0fcf7] sm:px-8 sm:py-10">
             <div className="mx-auto mb-1 h-1 w-14 rounded-full bg-gradient-to-r from-accent-mint via-[#FEF08A] to-accent-mint/90" aria-hidden />
-            <h2 className="text-center text-2xl font-bold text-ink">欢迎回来</h2>
+            <div className="flex items-center justify-center gap-2">
+              <h2 className="text-2xl font-bold text-ink">欢迎回来</h2>
+              <DemoAccountsPopover
+                onPickAccount={(row) => {
+                  setAccount(row.account);
+                  setLoginRole(row.role);
+                  if (row.studentGrade) setStudentGrade(row.studentGrade);
+                  setPassword(row.password);
+                  setGlobalError("");
+                }}
+              />
+            </div>
             <p className="mt-2 text-center text-caption text-ink-muted">
-              演示账号：
-              <span className="font-mono font-semibold text-ink-navActive">{DEMO_ACCOUNT}</span> /{" "}
-              <span className="font-mono font-semibold text-ink-navActive">{DEMO_PASSWORD}</span>
-              <span className="mt-2 block leading-snug">
-                请选择端别：家长端（代拍批改）· 学生端 · 教师端 · 教务系统端。学生若低于 {GRADING_MIN_GRADE} 年级须填确认码（演示：
-                <span className="font-mono font-semibold text-ink-navActive">{GUARDIAN_DEMO_PASSPHRASE}</span>）。
-              </span>
+              密码统一为 <span className="font-mono font-semibold text-ink-navActive">{DEMO_PASSWORD}</span>
+              ，点击标题旁表格图标查看各端演示账号
             </p>
+            {backendStale ? (
+              <p
+                className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-center text-caption leading-relaxed text-amber-950"
+                role="status"
+              >
+                当前后端未加载新演示账号（13800138001 等）。请在项目目录执行{" "}
+                <span className="font-mono font-semibold">.\run-conda.ps1</span> 重启后端后再试。
+              </p>
+            ) : null}
 
             {status === "success" ? (
               <div
@@ -241,9 +287,16 @@ export function LoginPage() {
                       value={account}
                       disabled={busy}
                       onChange={(ev) => {
-                        setAccount(ev.target.value);
+                        const v = ev.target.value;
+                        setAccount(v);
                         setGlobalError("");
                         if (fieldErrors.account) setFieldErrors((p) => ({ ...p, account: undefined }));
+                        const demo = findDemoAccount(v);
+                        if (demo) {
+                          setLoginRole(demo.role);
+                          if (demo.studentGrade) setStudentGrade(demo.studentGrade);
+                          if (!password) setPassword(demo.password);
+                        }
                       }}
                       aria-invalid={Boolean(fieldErrors.account)}
                       className="min-h-[48px] flex-1 bg-transparent px-3 py-3 text-small text-ink outline-none placeholder:text-ink-subtle"

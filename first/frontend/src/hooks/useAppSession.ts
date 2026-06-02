@@ -1,6 +1,11 @@
 import { useEffect, useState } from "react";
 
-import { APP_SESSION_CHANGED, loadSession, type AppSession } from "@/lib/appSession";
+import {
+  APP_SESSION_CHANGED,
+  loadSession,
+  syncSessionFromAuthMe,
+  type AppSession,
+} from "@/lib/appSession";
 
 /** 订阅本地演示会话，登录/退出后自动更新 */
 export function useAppSession(): AppSession | null {
@@ -14,6 +19,10 @@ export function useAppSession(): AppSession | null {
       window.removeEventListener(APP_SESSION_CHANGED, sync);
       window.removeEventListener("storage", sync);
     };
+  }, []);
+
+  useEffect(() => {
+    void syncSessionFromAuthMe();
   }, []);
 
   return session;

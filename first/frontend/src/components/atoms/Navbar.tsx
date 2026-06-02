@@ -2,10 +2,9 @@ import { useEffect, useState, type ReactNode } from "react";
 import { NavLink, Link, useLocation } from "react-router-dom";
 import { LogOut, Settings, UserRound } from "lucide-react";
 import { fetchGradingDisputes } from "@/lib/gradingDisputeApi";
-
 import { IpBrandFace } from "@/components/atoms/IpMascot";
 import { CUTE_ICON } from "@/components/atoms/cuteIcon";
-import { clearSession, sessionDisplayLabel } from "@/lib/appSession";
+import { clearSession, isAppLoggedIn, sessionDisplayLabel } from "@/lib/appSession";
 import { useAppSession } from "@/hooks/useAppSession";
 import { countWrongBookItems } from "@/lib/wrongQuestionBook";
 import { hasPermission } from "@/lib/rolePermissions";
@@ -70,10 +69,10 @@ export function Navbar({
 }: NavbarProps) {
   const location = useLocation();
   const session = useAppSession();
+  const loggedIn = isAppLoggedIn();
   const wrongCount = session?.role === "student" ? countWrongBookItems() : 0;
   const [disputePending, setDisputePending] = useState(0);
   const showGrading = hasPermission(session, "grading.access");
-  const showAnalytics = hasPermission(session, "analytics.student");
   const showClass = hasPermission(session, "analytics.class");
   const showFeedback = hasPermission(session, "feedback.dashboard");
   const showWrongBook = hasPermission(session, "wrong_book");
@@ -102,10 +101,6 @@ export function Navbar({
             <IpBrandFace size="md" className="-translate-y-px" decorative />
             <span className="truncate">{brandLabel}</span>
           </Link>
-
-          <span className="shrink-0 rounded-full bg-badge-demo-bg px-2 py-0.5 text-[0.6875rem] font-semibold leading-none text-badge-demo-fg ring-1 ring-black/[0.04]">
-            演示
-          </span>
         </div>
 
         <nav
@@ -119,7 +114,6 @@ export function Navbar({
               <NavItem to="/english">英语批改</NavItem>
             </>
           ) : null}
-          {showAnalytics ? <NavItem to="/student-analytics">学生学情</NavItem> : null}
           {showClass ? <NavItem to="/class-analytics">班级看板</NavItem> : null}
           {showFeedback ? <NavItem to="/feedback-dashboard">反馈看板</NavItem> : null}
           {showWorkspace ? <NavItem to="/workspace">作业管理</NavItem> : null}
@@ -147,35 +141,46 @@ export function Navbar({
         </nav>
 
         <div className="flex shrink-0 items-center justify-end gap-2">
-          {showHistoryDropdown ? <HistoryDropdown variant="nav" subjectScope="all" /> : null}
-          <NavLink
-            to="/settings"
-            title={disputePending > 0 ? `设置（${disputePending} 条待处理申诉）` : "设置"}
-            aria-label="设置"
-            className={({ isActive }) =>
-              [
-                "relative inline-flex min-h-10 min-w-10 items-center justify-center rounded-full border shadow-sm transition duration-button ease-smooth focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-2 focus-visible:ring-offset-white md:min-h-11 md:min-w-11",
-                isActive
-                  ? "border-brand/35 bg-primary-light text-[#006D41] ring-2 ring-primary/20"
-                  : "border-black/[0.06] bg-white text-ink-muted hover:border-primary/25 hover:text-[#006D41]",
-              ].join(" ")
-            }
-          >
-            <Settings className="h-5 w-5" {...CUTE_ICON} aria-hidden />
-            {showDisputeBadge && disputePending > 0 ? (
-              <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-amber-500 px-1 text-[0.6rem] font-black text-white ring-2 ring-white">
-                {disputePending > 9 ? "9+" : disputePending}
-              </span>
-            ) : null}
-          </NavLink>
-          {session ? (
+          {showHistoryDropdown ? <HistoryDropdown variant="nav" subjectScope="all" requireLogin={!loggedIn} /> : null}
+          {loggedIn ? (
+            <NavLink
+              to="/settings"
+              title={disputePending > 0 ? `设置（${disputePending} 条待处理申诉）` : "设置"}
+              aria-label="设置"
+              className={({ isActive }) =>
+                [
+                  "relative inline-flex min-h-10 min-w-10 items-center justify-center rounded-full border shadow-sm transition duration-button ease-smooth focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-2 focus-visible:ring-offset-white md:min-h-11 md:min-w-11",
+                  isActive
+                    ? "border-brand/35 bg-primary-light text-[#006D41] ring-2 ring-primary/20"
+                    : "border-black/[0.06] bg-white text-ink-muted hover:border-primary/25 hover:text-[#006D41]",
+                ].join(" ")
+              }
+            >
+              <Settings className="h-5 w-5" {...CUTE_ICON} aria-hidden />
+              {showDisputeBadge && disputePending > 0 ? (
+                <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-amber-500 px-1 text-[0.6rem] font-black text-white ring-2 ring-white">
+                  {disputePending > 9 ? "9+" : disputePending}
+                </span>
+              ) : null}
+            </NavLink>
+          ) : (
+            <Link
+              to={`/login?redirect=${encodeURIComponent("/settings")}`}
+              title="设置（需登录）"
+              aria-label="设置（需登录）"
+              className="relative inline-flex min-h-10 min-w-10 items-center justify-center rounded-full border border-black/[0.06] bg-white text-ink-muted shadow-sm transition duration-button ease-smooth hover:border-primary/25 hover:text-[#006D41] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-2 focus-visible:ring-offset-white md:min-h-11 md:min-w-11"
+            >
+              <Settings className="h-5 w-5" {...CUTE_ICON} aria-hidden />
+            </Link>
+          )}
+          {loggedIn ? (
             <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
               <span
                 className="inline-flex max-w-[7.5rem] items-center gap-1.5 rounded-full border border-primary/20 bg-primary-tint/90 px-2.5 py-1.5 text-[0.65rem] font-bold text-[#006D41] shadow-sm sm:max-w-none sm:px-3 sm:text-caption"
-                title={`已登录：${sessionDisplayLabel(session)}`}
+                title={session ? `已登录：${sessionDisplayLabel(session)}` : undefined}
               >
                 <UserRound className="h-4 w-4 shrink-0" {...CUTE_ICON} aria-hidden />
-                <span className="truncate">{sessionDisplayLabel(session)}</span>
+                <span className="truncate">{session ? sessionDisplayLabel(session) : ""}</span>
               </span>
               <button
                 type="button"

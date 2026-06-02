@@ -171,7 +171,7 @@ export function TeacherGradingDisputePanelBody({
 /** 教师：待处理的学生判题申诉（设置页） */
 export function TeacherGradingDisputePanel() {
   return (
-    <section className="mt-10 border-t border-primary/10 pt-8">
+    <section id="disputes" className="mt-10 scroll-mt-24 border-t border-primary/10 pt-8">
       <h2 className="flex items-center gap-2 text-body font-bold text-ink">
         <MessageSquareWarning className="h-5 w-5 text-amber-700" {...CUTE_ICON} aria-hidden />
         学生判题申诉

@@ -44,4 +44,7 @@ if ($distJs) {
     Write-Host "[WARN] frontend/dist not found. Run .\build-frontend.ps1 first." -ForegroundColor Yellow
 }
 
+Write-Host "[INFO] Demo accounts: 13800138001-8005, password 123456" -ForegroundColor Green
+Write-Host ""
+
 & $CondaPython app.py

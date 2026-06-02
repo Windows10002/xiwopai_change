@@ -1,13 +1,12 @@
 import { Link } from "react-router-dom";
-import { BarChart3, ClipboardList, MessageSquareWarning, Settings, Shield } from "lucide-react";
+import { ClipboardList, MessageSquareWarning, Settings, Shield } from "lucide-react";
 
 import { Navbar } from "@/components/atoms/Navbar";
 import { CUTE_ICON } from "@/components/atoms/cuteIcon";
 import { IpBrandFace } from "@/components/atoms/IpMascot";
 
 const TILES = [
-  { to: "/student-analytics", label: "学生学情", desc: "按学生汇总批改与薄弱点", icon: BarChart3 },
-  { to: "/class-analytics", label: "班级看板", desc: "按批次/文件夹班级分析", icon: ClipboardList },
+  { to: "/class-analytics", label: "班级看板", desc: "批次分析、学生学情与共性错题", icon: ClipboardList },
   { to: "/feedback-dashboard", label: "判题反馈", desc: "教师反馈与模型优化线索", icon: MessageSquareWarning },
   { to: "/math", label: "数学批改", desc: "抽检或演示批改（教务权限）", icon: Shield },
   { to: "/english", label: "英语批改", desc: "抽检或演示批改", icon: Shield },

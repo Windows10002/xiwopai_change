@@ -5,6 +5,7 @@ import { EnglishGradingPage } from "@/pages/EnglishGradingPage";
 import { MathGradingPage } from "@/pages/MathGradingPage";
 import { LoginPage } from "@/pages/LoginPage";
 import { ProtectedRoleRoute } from "@/components/organisms/ProtectedRoleRoute";
+import { RequireLoginRoute } from "@/components/organisms/RequireLoginRoute";
 import { APP_PREFS_CHANGED, loadUserPreferences, saveUserPreferences, syncUserPreferencesToDom } from "@/lib/userPreferences";
 
 const SettingsPage = lazy(() => import("@/pages/SettingsPage").then((m) => ({ default: m.SettingsPage })));
@@ -57,7 +58,9 @@ export default function App() {
           path="/settings"
           element={
             <Lazy>
-              <SettingsPage />
+              <RequireLoginRoute loginRedirect="/settings">
+                <SettingsPage />
+              </RequireLoginRoute>
             </Lazy>
           }
         />
@@ -85,7 +88,7 @@ export default function App() {
           path="/class-analytics"
           element={
             <Lazy>
-              <ProtectedRoleRoute anyOf={["analytics.class"]}>
+              <ProtectedRoleRoute anyOf={["analytics.class", "analytics.student"]}>
                 <ClassAnalyticsPage />
               </ProtectedRoleRoute>
             </Lazy>

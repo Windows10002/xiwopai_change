@@ -62,6 +62,8 @@ export type LoginApiResponse = ApiJson & {
   role?: string;
   student_grade?: number | null;
   grading_min_grade?: number;
+  display_name?: string | null;
+  teaching_grades?: string | null;
 };
 
 export async function loginApi(body: {
@@ -77,4 +79,19 @@ export async function loginApi(body: {
     body: JSON.stringify(body),
   });
   return parseApiJson<LoginApiResponse>(res);
+}
+
+export type AuthMeUser = {
+  role?: string;
+  sub?: string;
+  display_name?: string;
+  teaching_grades?: string;
+  student_grade?: number;
+  student_name?: string;
+};
+
+export async function fetchAuthMe(): Promise<AuthMeUser | null> {
+  const res = await apiFetch("/api/auth/me");
+  const body = await parseApiJson<{ user?: AuthMeUser }>(res);
+  return body.user ?? null;
 }

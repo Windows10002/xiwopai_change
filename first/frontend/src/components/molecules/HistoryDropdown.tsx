@@ -1,7 +1,7 @@
 import type { CSSProperties } from "react";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { ChevronDown, Clock } from "lucide-react";
 
 import { CUTE_ICON } from "@/components/atoms/cuteIcon";
@@ -12,6 +12,8 @@ export type HistoryDropdownVariant = "nav" | "toolbar";
 export type HistoryDropdownProps = {
   variant?: HistoryDropdownVariant;
   subjectScope?: "all" | "math" | "english";
+  /** 未登录时点击跳转登录页（与批改页门禁一致） */
+  requireLogin?: boolean;
 };
 
 const MENU_MIN_H = 160;
@@ -172,8 +174,9 @@ function HistoryMenuPanel({
   );
 }
 
-export function HistoryDropdown({ variant = "nav", subjectScope = "all" }: HistoryDropdownProps) {
+export function HistoryDropdown({ variant = "nav", subjectScope = "all", requireLogin = false }: HistoryDropdownProps) {
   const navigate = useNavigate();
+  const location = useLocation();
   const [open, setOpen] = useState(false);
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
@@ -330,7 +333,13 @@ export function HistoryDropdown({ variant = "nav", subjectScope = "all" }: Histo
       <button
         ref={triggerRef}
         type="button"
-        onClick={() => setOpen((v) => !v)}
+        onClick={() => {
+          if (requireLogin) {
+            navigate(`/login?redirect=${encodeURIComponent(location.pathname || "/")}`);
+            return;
+          }
+          setOpen((v) => !v);
+        }}
         className={triggerClass}
         aria-expanded={open}
         aria-haspopup="true"

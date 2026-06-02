@@ -42,6 +42,7 @@ import { checkImageQuality } from "@/lib/imageQualityCheck";
 import { rememberStudentFromGrading } from "@/lib/studentRoster";
 import { loadStudentProfileName } from "@/lib/studentProfileName";
 import { publishSubmissionToStudent } from "@/lib/workspaceApi";
+import { DEMO_PUBLISH_HINT } from "@/lib/demoEnvironment";
 import { canManageGrading } from "@/lib/rolePermissions";
 import { useUserPreferences } from "@/hooks/useUserPreferences";
 import { CUTE_ICON } from "@/components/atoms/cuteIcon";
@@ -904,6 +905,7 @@ export function GradingWorkspace({
               <p className="text-small font-semibold text-ink">
                 批改已保存至作业管理
                 {studentName.trim() ? `（${studentName.trim()}）` : ""}，确认无误后发送给学生。
+                <span className="mt-1 block text-caption font-normal text-ink-muted">{DEMO_PUBLISH_HINT}</span>
               </p>
               <PrimaryButton className="min-h-10 shrink-0 px-5 text-caption" onClick={() => void handlePublishToStudent()}>
                 发送给学生

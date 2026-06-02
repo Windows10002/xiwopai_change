@@ -1,5 +1,5 @@
-import { useState, type ReactNode } from "react";
-import { Link } from "react-router-dom";
+import { useEffect, useState, type ReactNode } from "react";
+import { Link, useLocation } from "react-router-dom";
 import { ArrowLeft, SlidersHorizontal } from "lucide-react";
 
 import { Navbar } from "@/components/atoms/Navbar";
@@ -211,6 +211,13 @@ function TeacherNoteTemplatesSection() {
 export function SettingsPage() {
   const prefs = useUserPreferences();
   const sessionInfo = useAppSession();
+  const location = useLocation();
+
+  useEffect(() => {
+    if (location.hash !== "#disputes") return;
+    const el = document.getElementById("disputes");
+    if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [location.hash]);
 
   const resetPrefs = () => {
     const next = saveUserPreferences({ ...DEFAULT_USER_PREFERENCES });
