@@ -33,6 +33,8 @@ type GradingContextModalProps = {
   fileCount: number;
   subject?: "math" | "english";
   initialGradeLevel?: string;
+  /** 未勾选「记住上次」时，默认选中的学生年级（如教师任教年级） */
+  defaultGradeLevel?: string;
   initialTeacherNote?: string;
   rememberContext?: boolean;
   /** 教师端：收集学生姓名，用于个性化学情 */
@@ -49,6 +51,7 @@ export function GradingContextModal({
   fileCount,
   subject = "math",
   initialGradeLevel = "",
+  defaultGradeLevel = "",
   initialTeacherNote = "",
   rememberContext = false,
   collectStudentName = false,
@@ -71,18 +74,17 @@ export function GradingContextModal({
 
   useEffect(() => {
     if (!open) return;
-    if (rememberContext) {
-      setGradeLevel(initialGradeLevel);
-      setTeacherNote(initialTeacherNote);
-    } else {
-      setGradeLevel("");
-      setTeacherNote("");
-    }
+    const resolvedGrade =
+      rememberContext && initialGradeLevel.trim()
+        ? initialGradeLevel
+        : defaultGradeLevel || initialGradeLevel;
+    setGradeLevel(resolvedGrade);
+    setTeacherNote(rememberContext ? initialTeacherNote : "");
     setIncludeEssayPrompt(false);
     setEssayPromptText("");
     setEssayPromptFile(null);
     setStudentName(collectStudentName ? initialStudentName : "");
-  }, [open, rememberContext, initialGradeLevel, initialTeacherNote, collectStudentName, initialStudentName]);
+  }, [open, rememberContext, initialGradeLevel, defaultGradeLevel, initialTeacherNote, collectStudentName, initialStudentName]);
 
   useEffect(() => {
     if (!open) return;

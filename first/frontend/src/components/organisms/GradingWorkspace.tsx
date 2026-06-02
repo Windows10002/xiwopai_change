@@ -18,20 +18,19 @@ import {
   GradingContextModal,
   type GradingContextConfirmPayload,
 } from "@/components/molecules/GradingContextModal";
+import { PublishedAssignmentPickerModal } from "@/components/molecules/PublishedAssignmentPickerModal";
 import { TeacherGradingDisputeToolbarButton } from "@/components/molecules/GradingDisputePanels";
 import { useAppSession } from "@/hooks/useAppSession";
 import { submitGrade } from "@/lib/gradeApi";
 import { mapWithConcurrency } from "@/lib/batchConcurrency";
 import type { GradingFeedbackTrace } from "@/lib/gradingFeedbackApi";
 import {
-  buildGroupedHistoryRows,
-  clearGradingHistoryForSubject,
-  deleteGradingHistoryEntry,
-  deleteGradingHistoryGroup,
+  GRADING_HISTORY_CHANGED,
   loadGradingHistory,
   saveGradingHistoryEntry,
   type GradingHistoryEntry,
 } from "@/lib/gradingHistory";
+import { GradingHistorySidePanel } from "@/components/molecules/GradingHistorySidePanel";
 import { clearGradingLiveDraft, loadGradingLiveDraft, saveGradingLiveDraft } from "@/lib/gradingSession";
 import { deleteHistoryImageBlob, getHistoryImageBlob, putHistoryImageBlob } from "@/lib/gradingHistoryImageDb";
 import { fileToJpegBlobForStorage, fileToJpegThumbDataUrl } from "@/lib/imageThumb";
@@ -41,7 +40,8 @@ import { saveUserPreferences } from "@/lib/userPreferences";
 import { checkImageQuality } from "@/lib/imageQualityCheck";
 import { rememberStudentFromGrading } from "@/lib/studentRoster";
 import { loadStudentProfileName } from "@/lib/studentProfileName";
-import { publishSubmissionToStudent } from "@/lib/workspaceApi";
+import { publishSubmissionToStudent, type WorkspaceAssignment } from "@/lib/workspaceApi";
+import { defaultGradeLevelForTeacher } from "@/lib/teacherGradeLevel";
 import { DEMO_PUBLISH_HINT } from "@/lib/demoEnvironment";
 import { canManageGrading } from "@/lib/rolePermissions";
 import { useUserPreferences } from "@/hooks/useUserPreferences";
@@ -108,6 +108,7 @@ export function GradingWorkspace({
   const prefs = useUserPreferences();
   const session = useAppSession();
   const canManage = session ? canManageGrading(session) : false;
+  const teacherDefaultGradeLevel = useMemo(() => defaultGradeLevelForTeacher(session), [session]);
   const isStudentUi = useIsStudentUi();
   const [helpOpen, setHelpOpen] = useState(false);
   const [batchInsightsOpen, setBatchInsightsOpen] = useState(false);
@@ -124,6 +125,10 @@ export function GradingWorkspace({
   const [teacherNote, setTeacherNote] = useState(() => (prefs.rememberGradingContext ? prefs.defaultTeacherNote : ""));
   const [studentName, setStudentName] = useState("");
   const [essayPromptText, setEssayPromptText] = useState("");
+  const [assignmentPickerOpen, setAssignmentPickerOpen] = useState(false);
+  const [linkedAssignmentTitle, setLinkedAssignmentTitle] = useState("");
+  const linkedAssignmentRef = useRef<{ id: string; title: string } | null>(null);
+  const taskFollowUpFileRef = useRef<HTMLInputElement>(null);
   const essayPromptFileRef = useRef<File | null>(null);
   /** 与 serverPreviewByIndexRef 同步：服务端 `/uploads/...` 路径，按批改批次下标 */
   const [serverImageUrlByIndex, setServerImageUrlByIndex] = useState<Record<number, string>>({});
@@ -260,6 +265,9 @@ export function GradingWorkspace({
     setHistoryEntryIdByIndex({});
     pendingFileRef.current = null;
     pendingImagePickRef.current = null;
+    linkedAssignmentRef.current = null;
+    setLinkedAssignmentTitle("");
+    setAssignmentPickerOpen(false);
     setContextModalOpen(false);
     setTeacherGradeLevel("");
     setTeacherNote("");
@@ -288,6 +296,12 @@ export function GradingWorkspace({
   const refreshHistory = useCallback(() => {
     setHistoryItems(loadGradingHistory());
   }, []);
+
+  useEffect(() => {
+    const onChanged = () => refreshHistory();
+    window.addEventListener(GRADING_HISTORY_CHANGED, onChanged);
+    return () => window.removeEventListener(GRADING_HISTORY_CHANGED, onChanged);
+  }, [refreshHistory]);
 
   const cancelImagePick = useCallback(() => {
     pendingImagePickRef.current = null;
@@ -366,6 +380,15 @@ export function GradingWorkspace({
     setTeacherGradeLevel(prefs.defaultGradeLevel);
     setTeacherNote(prefs.defaultTeacherNote);
   }, [prefs.defaultGradeLevel, prefs.defaultTeacherNote, prefs.rememberGradingContext]);
+
+  const handleAssignmentPicked = useCallback((assignment: WorkspaceAssignment) => {
+    linkedAssignmentRef.current = { id: assignment.id, title: assignment.title };
+    setLinkedAssignmentTitle(assignment.title);
+    setAssignmentPickerOpen(false);
+    setUploadStatus({ phase: "info", message: `已关联任务「${assignment.title}」，请选择学生作业图片。` });
+    schedule(() => setUploadStatus({ phase: "idle" }), 4200);
+    window.setTimeout(() => taskFollowUpFileRef.current?.click(), 0);
+  }, [schedule]);
 
   const handleFiles = useCallback(
     (files: FileList | null) => {
@@ -449,7 +472,8 @@ export function GradingWorkspace({
             essayPromptText: subject === "english" ? essayPromptText.trim() || undefined : undefined,
             essayPromptFile: subject === "english" ? essayPromptFileRef.current ?? undefined : undefined,
             studentName: wsStudentName || undefined,
-            saveToWorkspace: Boolean(wsStudentName),
+            assignmentId: linkedAssignmentRef.current?.id,
+            saveToWorkspace: Boolean(wsStudentName || linkedAssignmentRef.current?.id),
             publishToStudent: session?.role === "student" && Boolean(wsStudentName),
           });
           nextResults[index] = detail;
@@ -474,6 +498,9 @@ export function GradingWorkspace({
                 ? studentName.trim()
                   ? { studentName: studentName.trim() }
                   : {}
+                : {}),
+              ...(linkedAssignmentRef.current?.title
+                ? { assignmentTitle: linkedAssignmentRef.current.title }
                 : {}),
               ...(teacherGradeLevel.trim() ? { gradeLevel: teacherGradeLevel.trim() } : {}),
               ...(thumb ? { thumbDataUrl: thumb } : {}),
@@ -711,9 +738,6 @@ export function GradingWorkspace({
     }
   }, [currentFileIndex]);
 
-  const historyForSubject = useMemo(() => historyItems.filter((h) => h.subject === subject), [historyItems, subject]);
-  const historyRows = useMemo(() => buildGroupedHistoryRows(historyForSubject), [historyForSubject]);
-
   const exportBaseName = useMemo(() => {
     const name = selectedFiles[currentFileIndex]?.name ?? "";
     const stem = name.replace(/\.[^/.]+$/, "").trim();
@@ -721,22 +745,50 @@ export function GradingWorkspace({
   }, [selectedFiles, currentFileIndex]);
 
   const batchInsightEntries = useMemo(() => {
-    const out: Array<{ fileName: string; detail: GradingResultDetail }> = [];
+    const nameForIndex = (index: number) => {
+      const histId = historyEntryIdByIndex[index];
+      const hist = histId ? historyItems.find((h) => h.id === histId) : undefined;
+      return hist?.studentName?.trim() || studentName.trim() || undefined;
+    };
+
     if (result && selectedFiles.length === 1) {
-      return [{ fileName: selectedFiles[0]!.name, detail: result }];
+      return [
+        {
+          fileName: selectedFiles[0]!.name,
+          detail: result,
+          studentName: nameForIndex(currentFileIndex) || studentName.trim() || undefined,
+        },
+      ];
     }
     if (selectedFiles.length > 1 && batchResults.length > 0) {
+      const out: Array<{ fileName: string; detail: GradingResultDetail; studentName?: string }> = [];
       selectedFiles.forEach((file, index) => {
         const detail = batchResults[index];
-        if (detail) out.push({ fileName: file.name, detail });
+        if (detail) out.push({ fileName: file.name, detail, studentName: nameForIndex(index) });
       });
       return out;
     }
     if (result && selectedFiles.length === 0) {
-      out.push({ fileName: insightFileName.trim() || exportBaseName, detail: result });
+      return [
+        {
+          fileName: insightFileName.trim() || exportBaseName,
+          detail: result,
+          studentName: studentName.trim() || undefined,
+        },
+      ];
     }
-    return out;
-  }, [selectedFiles, batchResults, result, exportBaseName, insightFileName]);
+    return [];
+  }, [
+    selectedFiles,
+    batchResults,
+    result,
+    exportBaseName,
+    insightFileName,
+    historyEntryIdByIndex,
+    historyItems,
+    studentName,
+    currentFileIndex,
+  ]);
 
   const batchInsightGroupName = useMemo(() => {
     if (selectedFiles.length > 1) {
@@ -944,9 +996,36 @@ export function GradingWorkspace({
                   title={uploadTitle}
                   hint={combinedHint}
                   onFiles={handleFiles}
+                  onPickFromPublishedTask={canManage ? () => setAssignmentPickerOpen(true) : undefined}
                   status={step >= 3 && !isGrading ? { phase: "idle" } : uploadStatus}
                   locked={uploadLocked}
                   compact={step >= 3 && !isGrading}
+                />
+                {linkedAssignmentTitle ? (
+                  <p className="rounded-xl border border-violet-200/80 bg-violet-50/80 px-3 py-2 text-center text-caption font-semibold text-violet-950">
+                    已关联任务：{linkedAssignmentTitle}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        linkedAssignmentRef.current = null;
+                        setLinkedAssignmentTitle("");
+                      }}
+                      className="ml-2 font-bold text-violet-700 underline-offset-2 hover:underline"
+                    >
+                      取消关联
+                    </button>
+                  </p>
+                ) : null}
+                <input
+                  ref={taskFollowUpFileRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,image/bmp,image/gif,.jpg,.jpeg,.png,.webp,.bmp,.gif"
+                  multiple
+                  className="hidden"
+                  onChange={(e) => {
+                    handleFiles(e.target.files);
+                    e.target.value = "";
+                  }}
                 />
                 {step < 3 || isGrading ? (
                   <>
@@ -1008,7 +1087,7 @@ export function GradingWorkspace({
                           </p>
                         </div>
                       </div>
-                      <ul className="mt-3 max-h-[min(40vh,16rem)] space-y-1.5 overflow-y-auto overscroll-contain">
+                      <ul className="scrollbar-primary-mint mt-3 max-h-[min(40vh,16rem)] space-y-1.5 overflow-y-auto overscroll-contain">
                         {selectedFiles.map((file, index) => {
                           const r = batchResults[index];
                           const err = batchErrors[index];
@@ -1101,6 +1180,9 @@ export function GradingWorkspace({
         gradeLevel={teacherGradeLevel}
         teacherNote={teacherNote}
         groupName={batchInsightGroupName}
+        studentName={studentName.trim() || undefined}
+        currentSubmissionId={currentSubmissionId}
+        enableVariantDispatch={canManage}
         onInsightsData={setCachedBatchInsights}
       />
       <AiHelpModal open={helpOpen} onClose={() => setHelpOpen(false)} />
@@ -1109,6 +1191,7 @@ export function GradingWorkspace({
         fileCount={contextFileCount}
         subject={subject}
         initialGradeLevel={prefs.defaultGradeLevel}
+        defaultGradeLevel={teacherDefaultGradeLevel}
         initialTeacherNote={prefs.defaultTeacherNote}
         rememberContext={prefs.rememberGradingContext}
         collectStudentName={canManage || session?.role === "parent"}
@@ -1116,142 +1199,25 @@ export function GradingWorkspace({
         onConfirm={applyConfirmedImagePick}
         onCancel={cancelImagePick}
       />
-
-      {historyOpen ? (
-        <div className="fixed inset-0 z-[90] flex justify-end bg-black/35 backdrop-blur-[1px]" role="dialog" aria-modal="true" aria-label="批改历史">
-          <button type="button" className="absolute inset-0" aria-label="关闭历史" onClick={() => setHistoryOpen(false)} />
-          <aside className="relative z-10 flex h-full w-full max-w-md flex-col border-l border-black/[0.08] bg-white shadow-2xl">
-            <div className="flex flex-wrap items-start justify-between gap-3 border-b border-black/[0.06] px-4 py-4">
-              <div className="min-w-0">
-                <p className="text-body font-extrabold text-ink">批改历史 · {subjectLabel}</p>
-                <p className="mt-1 text-caption text-ink-muted">
-                  约 1 年内本地记录 · 共 {historyForSubject.length} 条
-                  {historyRows.length !== historyForSubject.length ? `（${historyRows.length} 组展示）` : ""}
-                </p>
-              </div>
-              <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
-                <button
-                  type="button"
-                  className="rounded-full border border-red-200/90 bg-red-50/90 px-3 py-1.5 text-caption font-semibold text-red-700 shadow-sm transition hover:bg-red-100"
-                  onClick={() => {
-                    if (!window.confirm(`确定清空「${subjectLabel}」的全部本地历史？其它学科记录将保留。`)) return;
-                    const removed = clearGradingHistoryForSubject(subject);
-                    removed.forEach((id) => void deleteHistoryImageBlob(id));
-                    refreshHistory();
-                  }}
-                >
-                  清空本学科
-                </button>
-                <button
-                  type="button"
-                  className="rounded-full border border-black/[0.08] px-3 py-1.5 text-caption font-semibold text-ink-muted hover:bg-black/[0.03]"
-                  onClick={() => setHistoryOpen(false)}
-                >
-                  关闭
-                </button>
-              </div>
-            </div>
-            <div className="min-h-0 flex-1 overflow-y-auto px-3 py-3">
-              {historyRows.length === 0 ? (
-                <p className="px-2 py-8 text-center text-caption text-ink-muted">暂无历史，批改成功后会自动记录结果。</p>
-              ) : (
-                <ul className="space-y-3">
-                  {historyRows.map((row) =>
-                    row.type === "single" ? (
-                      <li key={row.entry.id} className="rounded-2xl border border-black/[0.06] bg-primary-tint/30 p-3 shadow-sm">
-                        <button
-                          type="button"
-                          onClick={() => applyHistoryEntry(row.entry)}
-                          className="flex w-full gap-3 rounded-xl text-left transition hover:bg-white/75"
-                        >
-                          {row.entry.thumbDataUrl ? (
-                            <img
-                              src={row.entry.thumbDataUrl}
-                              alt=""
-                              className="h-14 w-14 shrink-0 rounded-lg border border-black/[0.06] object-cover shadow-sm"
-                            />
-                          ) : (
-                            <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-lg border border-dashed border-black/[0.1] bg-white/80 text-[0.65rem] font-semibold text-ink-muted">
-                              无缩略
-                            </div>
-                          )}
-                          <div className="min-w-0 flex-1">
-                            <div className="flex items-start justify-between gap-2">
-                              <p className="min-w-0 flex-1 truncate text-small font-bold text-ink">{row.entry.fileName}</p>
-                              <span className="shrink-0 rounded-full bg-white px-2.5 py-0.5 text-[0.65rem] font-black text-[#006D41] ring-1 ring-primary/20">
-                                {row.entry.detail.scorePercent}%
-                              </span>
-                            </div>
-                            <p className="mt-2 line-clamp-3 text-caption leading-relaxed text-ink-muted">
-                              {row.entry.detail.summaryText || row.entry.detail.overallLabel}
-                            </p>
-                            <p className="mt-2 text-[0.65rem] text-ink-subtle">{new Date(row.entry.createdAt).toLocaleString("zh-CN")}</p>
-                          </div>
-                        </button>
-                        <button
-                          type="button"
-                          className="mt-2 w-full rounded-lg py-1.5 text-center text-[0.65rem] font-semibold text-red-600 hover:bg-red-50/80 hover:underline"
-                          onClick={() => {
-                            deleteGradingHistoryEntry(row.entry.id);
-                            void deleteHistoryImageBlob(row.entry.id);
-                            refreshHistory();
-                          }}
-                        >
-                          删除此条
-                        </button>
-                      </li>
-                    ) : (
-                      <li key={row.groupKey} className="rounded-2xl border border-brand/25 bg-primary-tint/40 p-3 shadow-sm ring-1 ring-primary/12">
-                        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-black/[0.06] pb-2">
-                          <p className="text-small font-extrabold text-[#006D41]">
-                            {row.groupName ? `${row.groupName} · ${row.items.length} 张` : `文件夹批改 · ${row.items.length} 张`}
-                          </p>
-                          <span className="shrink-0 rounded-full bg-white px-2.5 py-0.5 text-[0.65rem] font-black text-[#006D41] ring-1 ring-primary/20">
-                            均分{" "}
-                            {Math.round(row.items.reduce((s, i) => s + i.detail.scorePercent, 0) / row.items.length)}%
-                          </span>
-                        </div>
-                        <p className="mt-1 text-[0.65rem] text-ink-subtle">{new Date(row.createdAt).toLocaleString("zh-CN")}</p>
-                        <ul className="mt-2 max-h-52 space-y-1.5 overflow-y-auto overscroll-contain">
-                          {row.items.map((h) => (
-                            <li key={h.id} className="rounded-xl bg-white/80 ring-1 ring-black/[0.05]">
-                              <button
-                                type="button"
-                                onClick={() => applyHistoryEntry(h)}
-                                className="flex w-full items-center gap-2 px-2 py-2 text-left transition hover:bg-white"
-                              >
-                                {h.thumbDataUrl ? (
-                                  <img src={h.thumbDataUrl} alt="" className="h-9 w-9 shrink-0 rounded-md object-cover" />
-                                ) : (
-                                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-surface-page text-[0.55rem] text-ink-muted">无图</div>
-                                )}
-                                <span className="min-w-0 flex-1 truncate text-caption font-semibold text-ink">{h.fileName}</span>
-                                <span className="shrink-0 text-[0.65rem] font-bold text-[#006D41]">{h.detail.scorePercent}%</span>
-                              </button>
-                            </li>
-                          ))}
-                        </ul>
-                        <button
-                          type="button"
-                          className="mt-2 w-full rounded-lg py-1.5 text-center text-[0.65rem] font-semibold text-red-600 hover:bg-red-50/80 hover:underline"
-                          onClick={() => {
-                            if (!window.confirm(`确定删除该文件夹批改的全部 ${row.items.length} 条记录？`)) return;
-                            const removed = deleteGradingHistoryGroup(row.groupKey);
-                            removed.forEach((id) => void deleteHistoryImageBlob(id));
-                            refreshHistory();
-                          }}
-                        >
-                          删除整组
-                        </button>
-                      </li>
-                    )
-                  )}
-                </ul>
-              )}
-            </div>
-          </aside>
-        </div>
+      {canManage ? (
+        <PublishedAssignmentPickerModal
+          open={assignmentPickerOpen}
+          subject={subject}
+          onSelect={handleAssignmentPicked}
+          onClose={() => setAssignmentPickerOpen(false)}
+        />
       ) : null}
+
+      <GradingHistorySidePanel
+        open={historyOpen}
+        subject={subject}
+        subjectLabel={subjectLabel}
+        entries={historyItems}
+        onClose={() => setHistoryOpen(false)}
+        onRefresh={refreshHistory}
+        onApplyEntry={applyHistoryEntry}
+        onDeleteImageBlob={deleteHistoryImageBlob}
+      />
     </div>
   );
 }

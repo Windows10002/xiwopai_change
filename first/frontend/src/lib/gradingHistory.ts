@@ -4,11 +4,23 @@ const STORAGE_KEY = "grading_history_v1";
 const MAX_AGE_MS = 365 * 24 * 60 * 60 * 1000;
 const MAX_ENTRIES = 400;
 
+export const GRADING_HISTORY_CHANGED = "grading-history-changed";
+
+function emitHistoryChanged(): void {
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new Event(GRADING_HISTORY_CHANGED));
+  }
+}
+
 export type GradingHistoryEntry = {
   id: string;
   createdAt: number;
   subject: "math" | "english";
   fileName: string;
+  /** 重命名后的展示标题（优先于 fileName） */
+  displayTitle?: string;
+  /** 关联任务/文件夹名称 */
+  assignmentTitle?: string;
   /** 教师批改时标注的学生姓名，用于个性化学情汇总 */
   studentName?: string;
   /** 批改时选择的年级/学段 */
@@ -58,6 +70,10 @@ export function saveGradingHistoryEntry(
     createdAt: entry.createdAt ?? Date.now(),
     subject: entry.subject,
     fileName: entry.fileName,
+    displayTitle: entry.displayTitle,
+    assignmentTitle: entry.assignmentTitle,
+    studentName: entry.studentName,
+    gradeLevel: entry.gradeLevel,
     detail: entry.detail,
     thumbDataUrl: entry.thumbDataUrl,
     groupKey: entry.groupKey,
@@ -83,12 +99,36 @@ export function saveGradingHistoryEntry(
       }
     }
   }
+  emitHistoryChanged();
   return full;
+}
+
+export function historyEntryTitle(entry: GradingHistoryEntry): string {
+  return entry.displayTitle?.trim() || entry.fileName;
+}
+
+export function updateGradingHistoryEntry(
+  id: string,
+  patch: Partial<Pick<GradingHistoryEntry, "fileName" | "displayTitle" | "assignmentTitle" | "studentName" | "gradeLevel" | "detail">>,
+): GradingHistoryEntry | null {
+  const prev = loadGradingHistory();
+  const idx = prev.findIndex((e) => e.id === id);
+  if (idx < 0) return null;
+  const next = [...prev];
+  next[idx] = { ...next[idx]!, ...patch };
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(prune(next)));
+  } catch {
+    return null;
+  }
+  emitHistoryChanged();
+  return next[idx]!;
 }
 
 export function deleteGradingHistoryEntry(id: string): void {
   const next = loadGradingHistory().filter((e) => e.id !== id);
   localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+  emitHistoryChanged();
 }
 
 /** 删除同一文件夹批量批改产生的全部条目，返回被删 id */
@@ -101,6 +141,7 @@ export function deleteGradingHistoryGroup(groupKey: string): string[] {
   } catch {
     /* ignore */
   }
+  emitHistoryChanged();
   return removed;
 }
 
@@ -147,6 +188,7 @@ export function buildGroupedHistoryRows(entries: GradingHistoryEntry[]): History
 
 export function clearGradingHistory(): void {
   localStorage.removeItem(STORAGE_KEY);
+  emitHistoryChanged();
 }
 
 /** 仅移除某一学科的历史，其它学科记录保留；返回被移除条目的 id（便于同步清理 IndexedDB 原图） */
@@ -159,5 +201,6 @@ export function clearGradingHistoryForSubject(subject: "math" | "english"): stri
   } catch {
     /* ignore */
   }
+  emitHistoryChanged();
   return removed;
 }

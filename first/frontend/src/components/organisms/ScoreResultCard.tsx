@@ -108,7 +108,7 @@ function DimensionScoresPanel({
         ) : null}
       </div>
       {open ? (
-        <div className="max-h-[min(60vh,26rem)] overflow-y-auto overscroll-contain pr-0.5 [-webkit-overflow-scrolling:touch]">
+        <div className="max-h-[min(60vh,26rem)] overflow-y-auto overscroll-contain pr-0.5 scrollbar-primary-mint [-webkit-overflow-scrolling:touch]">
           <DimensionScoreBars
             dimensions={dimensions}
             subject={subject}
@@ -160,6 +160,12 @@ export function ScoreResultCard({
   const [feedbackErr, setFeedbackErr] = useState<string | null>(null);
   const [feedbackToast, setFeedbackToast] = useState<string | null>(null);
   const [teacherEditValue, setTeacherEditValue] = useState("");
+  const [useScoreBreakdown, setUseScoreBreakdown] = useState(false);
+  const [scoreParts, setScoreParts] = useState([
+    { id: "process", label: "过程分", value: "" },
+    { id: "result", label: "结果分", value: "" },
+  ]);
+  const [teacherEditStatus, setTeacherEditStatus] = useState("正确");
 
   /** 学情/导出用条目：优先父级传入；单张批改或无文件列表时用当前 result */
   const insightEntries = useMemo(() => {
@@ -167,7 +173,18 @@ export function ScoreResultCard({
     if (result) return buildInsightEntriesFromResult(result, exportBaseName);
     return [];
   }, [batchInsightEntries, result, exportBaseName]);
-  const [teacherEditStatus, setTeacherEditStatus] = useState("正确");
+
+  useEffect(() => {
+    if (!useScoreBreakdown || !feedbackUi || feedbackUi.mode !== "question") return;
+    const max = feedbackUi.dim.max;
+    let sum = 0;
+    for (const part of scoreParts) {
+      const n = Number.parseFloat(part.value.replace(/,/g, ".").trim());
+      if (Number.isFinite(n)) sum += n;
+    }
+    const clamped = Math.min(max, Math.max(0, Math.round(sum * 10) / 10));
+    setTeacherEditValue(String(clamped));
+  }, [useScoreBreakdown, scoreParts, feedbackUi]);
 
   const strategyModel = useMemo((): ScoringStrategyModel | null => {
     if (!result) return null;
@@ -516,6 +533,11 @@ export function ScoreResultCard({
                       setFeedbackErr(null);
                       setTeacherEditValue(String(d.value));
                       setTeacherEditStatus(d.status ?? "正确");
+                      setUseScoreBreakdown(false);
+                      setScoreParts([
+                        { id: "process", label: "过程分", value: "" },
+                        { id: "result", label: "结果分", value: "" },
+                      ]);
                     }
                   : undefined
               }
@@ -1019,9 +1041,69 @@ export function ScoreResultCard({
               ) : null}
               {feedbackUi.mode === "question" && canManage ? (
                 <div className={`space-y-3 ${APP_DIALOG_PANEL}`}>
+                  <label className="flex cursor-pointer items-center gap-2 text-caption font-semibold text-ink">
+                    <input
+                      type="checkbox"
+                      checked={useScoreBreakdown}
+                      onChange={(e) => setUseScoreBreakdown(e.target.checked)}
+                      className="h-4 w-4 rounded border-black/20 text-[#52C41A] focus:ring-primary/25"
+                    />
+                    细分分数构成（可选）
+                  </label>
+                  {useScoreBreakdown ? (
+                    <div className="space-y-2 rounded-xl border border-primary/15 bg-primary-tint/20 p-3">
+                      <p className="text-[0.65rem] leading-relaxed text-ink-muted">
+                        填写各分项后自动合计为本题得分（不超过满分 {feedbackUi.dim.max}）
+                      </p>
+                      {scoreParts.map((part, index) => (
+                        <div key={part.id} className="flex items-center gap-2">
+                          <input
+                            type="text"
+                            value={part.label}
+                            onChange={(e) =>
+                              setScoreParts((prev) =>
+                                prev.map((p, i) => (i === index ? { ...p, label: e.target.value.slice(0, 12) } : p)),
+                              )
+                            }
+                            className="w-20 shrink-0 rounded-lg border border-black/[0.1] bg-white px-2 py-1.5 text-caption font-semibold text-ink outline-none focus:border-primary/35"
+                            aria-label={`分项 ${index + 1} 名称`}
+                          />
+                          <input
+                            type="number"
+                            min={0}
+                            max={feedbackUi.dim.max}
+                            step={0.5}
+                            value={part.value}
+                            onChange={(e) =>
+                              setScoreParts((prev) =>
+                                prev.map((p, i) => (i === index ? { ...p, value: e.target.value } : p)),
+                              )
+                            }
+                            placeholder="0"
+                            className="min-w-0 flex-1 rounded-lg border border-black/[0.1] bg-white px-2 py-1.5 text-small font-mono text-ink outline-none focus:border-primary/35"
+                            aria-label={`${part.label} 分值`}
+                          />
+                        </div>
+                      ))}
+                      <button
+                        type="button"
+                        disabled={scoreParts.length >= 4}
+                        onClick={() =>
+                          setScoreParts((prev) => [
+                            ...prev,
+                            { id: `extra-${prev.length}`, label: `分项${prev.length + 1}`, value: "" },
+                          ])
+                        }
+                        className="text-[0.65rem] font-bold text-[#006D41] hover:underline disabled:opacity-40"
+                      >
+                        + 添加分项
+                      </button>
+                    </div>
+                  ) : null}
                   <div>
                     <label htmlFor="teacher-edit-score" className="mb-1 block text-small font-bold text-ink">
                       本题得分（满分 {feedbackUi.dim.max}）
+                      {useScoreBreakdown ? <span className="ml-1 text-caption font-normal text-ink-muted">· 由分项自动合计</span> : null}
                     </label>
                     <input
                       id="teacher-edit-score"
@@ -1030,8 +1112,11 @@ export function ScoreResultCard({
                       max={feedbackUi.dim.max}
                       step={0.5}
                       value={teacherEditValue}
+                      readOnly={useScoreBreakdown}
                       onChange={(e) => setTeacherEditValue(e.target.value)}
-                      className="w-full rounded-xl border border-black/[0.1] bg-white px-3 py-2 text-small font-mono text-ink shadow-sm outline-none focus:border-primary/35 focus:ring-2 focus:ring-primary/15"
+                      className={`w-full rounded-xl border border-black/[0.1] bg-white px-3 py-2 text-small font-mono text-ink shadow-sm outline-none focus:border-primary/35 focus:ring-2 focus:ring-primary/15 ${
+                        useScoreBreakdown ? "bg-primary-tint/25 text-ink-muted" : ""
+                      }`}
                     />
                   </div>
                   {subject === "math" ? (

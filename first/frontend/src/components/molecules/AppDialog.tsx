@@ -103,7 +103,7 @@ export function AppDialog({
         </div>
         <div
           id={describedById}
-          className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-4"
+          className="scrollbar-primary-mint min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-4"
         >
           {children}
         </div>

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { CheckCircle2, CircleX, FolderOpen, ImagePlus, UploadCloud } from "lucide-react";
+import { CheckCircle2, CircleX, ClipboardList, FolderOpen, ImagePlus, UploadCloud } from "lucide-react";
 import { CUTE_ICON } from "@/components/atoms/cuteIcon";
 import { IpMascotLoading, IpMascotPointGuide } from "@/components/atoms/IpMascot";
 import type { UploadPanelStatus } from "@/types/grading";
@@ -102,6 +102,8 @@ type UploadDropzoneProps = {
   title?: string;
   hint?: string;
   onFiles?: (files: FileList | null) => void;
+  /** 教师端：从已发布任务关联提交 */
+  onPickFromPublishedTask?: () => void;
   /** 由上层驱动的上传全流程状态 */
   status?: UploadPanelStatus;
   /** 上传流程进行中时禁止再次拖入 */
@@ -117,6 +119,7 @@ export function UploadDropzone({
   title = "拖放照片到此处",
   hint = "支持 JPG / PNG / WebP；建议正对纸张、光线均匀。",
   onFiles,
+  onPickFromPublishedTask,
   status = { phase: "idle" },
   locked = false,
   compact = false,
@@ -350,6 +353,20 @@ export function UploadDropzone({
                 <FolderOpen className="h-4 w-4" {...CUTE_ICON} aria-hidden />
                 选择文件夹
               </button>
+              {onPickFromPublishedTask ? (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setSourcePickerOpen(false);
+                    onPickFromPublishedTask();
+                  }}
+                  className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-violet-200/80 bg-violet-50/90 px-4 py-3 text-caption font-bold text-violet-900 shadow-sm transition hover:-translate-y-0.5 hover:border-violet-300 hover:bg-violet-100/90"
+                >
+                  <ClipboardList className="h-4 w-4" {...CUTE_ICON} aria-hidden />
+                  选择从发布的任务中提交
+                </button>
+              ) : null}
               <div className="mt-4 flex justify-center border-t border-black/[0.06] pt-3">
                 <button
                   type="button"
@@ -466,6 +483,9 @@ export function UploadDropzone({
                 {dragging
                   ? "松开鼠标即可上传；边框加粗、底色微亮表示已进入拖拽区域。"
                   : "点上方说明区或底部 π 提示可打开添加方式；点「选择图片」「选择文件夹」直接打开系统选择；两按钮之间的空白也可打开添加方式。支持拖入。"}
+                {onPickFromPublishedTask
+                  ? " 教师还可「选择从发布的任务中提交」，将批改关联到已发布任务。"
+                  : ""}
               </span>
             </p>
             )}
@@ -499,6 +519,19 @@ export function UploadDropzone({
               <FolderOpen className="h-4 w-4 pointer-events-none" {...CUTE_ICON} aria-hidden />
               选择文件夹
             </button>
+            {onPickFromPublishedTask ? (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onPickFromPublishedTask();
+                }}
+                className="inline-flex items-center gap-2 rounded-full border border-violet-200/80 bg-violet-50/90 px-4 py-2 text-caption font-bold text-violet-900 shadow-sm transition hover:-translate-y-0.5 hover:border-violet-300 hover:bg-violet-100/90"
+              >
+                <ClipboardList className="h-4 w-4 pointer-events-none" {...CUTE_ICON} aria-hidden />
+                从发布任务提交
+              </button>
+            ) : null}
           </div>
           {!compact ? (
           <div

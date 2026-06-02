@@ -7,7 +7,7 @@ import { CUTE_ICON } from "@/components/atoms/cuteIcon";
 import { clearSession, isAppLoggedIn, sessionDisplayLabel } from "@/lib/appSession";
 import { useAppSession } from "@/hooks/useAppSession";
 import { countWrongBookItems } from "@/lib/wrongQuestionBook";
-import { hasPermission } from "@/lib/rolePermissions";
+import { hasPermission, ROLE_LABEL } from "@/lib/rolePermissions";
 
 import {
   HistoryDropdown,
@@ -180,7 +180,7 @@ export function Navbar({
                 title={session ? `已登录：${sessionDisplayLabel(session)}` : undefined}
               >
                 <UserRound className="h-4 w-4 shrink-0" {...CUTE_ICON} aria-hidden />
-                <span className="truncate">{session ? sessionDisplayLabel(session) : ""}</span>
+                <span className="truncate">{session ? ROLE_LABEL[session.role] : ""}</span>
               </span>
               <button
                 type="button"

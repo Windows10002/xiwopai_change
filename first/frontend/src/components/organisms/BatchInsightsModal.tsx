@@ -4,6 +4,8 @@ import { BarChart3, BookOpen, Copy, Loader2, Sparkles } from "lucide-react";
 import { AppDialog, APP_DIALOG_PANEL, APP_DIALOG_PANEL_TITLE } from "@/components/molecules/AppDialog";
 import { CUTE_ICON } from "@/components/atoms/cuteIcon";
 import { MathPrettyText } from "@/components/atoms/MathPrettyText";
+import { LearningReportBody } from "@/components/molecules/LearningReportBody";
+import { VariantProblemSendTrigger } from "@/components/molecules/VariantProblemSendDialog";
 import type { BatchInsightsResponse } from "@/lib/gradingBatchInsights";
 import {
   aggregateBatchLocally,
@@ -11,19 +13,26 @@ import {
   buildRuleKnowledgeVariants,
   fetchBatchInsights,
 } from "@/lib/gradingBatchInsights";
+import { learningReportPlainText, normalizeLearningReportMarkdown } from "@/lib/learningReportFormat";
 import type { GradingResultDetail } from "@/types/grading";
+
+type InsightEntry = { fileName: string; detail: GradingResultDetail; studentName?: string };
 
 type BatchInsightsModalProps = {
   open: boolean;
   onClose: () => void;
   subject: "math" | "english";
   subjectLabel: string;
-  entries: Array<{ fileName: string; detail: GradingResultDetail }>;
+  entries: InsightEntry[];
   gradeLevel?: string;
   teacherNote?: string;
   groupName?: string;
   analysisMode?: "batch" | "student_personalized";
   studentName?: string;
+  /** 批改页当前提交 id，用于「本题做错」精准下发 */
+  currentSubmissionId?: string;
+  /** 教师端：展示变形题发送菜单 */
+  enableVariantDispatch?: boolean;
   dialogTitle?: string;
   /** 分析完成后回传，供导出 Word/Excel 使用 */
   onInsightsData?: (data: BatchInsightsResponse) => void;
@@ -52,6 +61,8 @@ export function BatchInsightsModal({
   groupName,
   analysisMode = "batch",
   studentName,
+  currentSubmissionId,
+  enableVariantDispatch = false,
   dialogTitle,
   onInsightsData,
 }: BatchInsightsModalProps) {
@@ -63,6 +74,24 @@ export function BatchInsightsModal({
 
   const canAnalyze = entries.length > 0;
   const isSinglePaper = entries.length === 1;
+
+  const applyInsights = useCallback(
+    (payload: BatchInsightsResponse) => {
+      const summary = payload.learning_report?.summary_md;
+      if (summary) {
+        payload = {
+          ...payload,
+          learning_report: {
+            ...payload.learning_report,
+            summary_md: normalizeLearningReportMarkdown(summary),
+          },
+        };
+      }
+      setData(payload);
+      onInsightsData?.(payload);
+    },
+    [onInsightsData],
+  );
 
   const runAnalysis = useCallback(
     async (useLlm: boolean) => {
@@ -81,8 +110,7 @@ export function BatchInsightsModal({
             analysisMode,
             studentName,
           });
-          setData(res);
-          onInsightsData?.(res);
+          applyInsights(res);
         } else {
           const local = aggregateBatchLocally(subject, entries);
           const payload: BatchInsightsResponse = {
@@ -90,8 +118,7 @@ export function BatchInsightsModal({
             ...local,
             knowledge_variants: buildRuleKnowledgeVariants(subject, local),
           };
-          setData(payload);
-          onInsightsData?.(payload);
+          applyInsights(payload);
         }
         setTab("report");
       } catch (e) {
@@ -106,15 +133,14 @@ export function BatchInsightsModal({
             variant_problems: [],
           },
         };
-        setData(payload);
-        onInsightsData?.(payload);
+        applyInsights(payload);
         setError(`${msg} · 已展示本地汇总`);
         setTab("report");
       } finally {
         setLoading(false);
       }
     },
-    [analysisMode, canAnalyze, subject, entries, gradeLevel, teacherNote, groupName, studentName, onInsightsData],
+    [analysisMode, applyInsights, canAnalyze, subject, entries, gradeLevel, teacherNote, groupName, studentName],
   );
 
   const reportText = useMemo(() => data?.learning_report?.summary_md ?? "", [data]);
@@ -122,7 +148,7 @@ export function BatchInsightsModal({
   const copyReport = async () => {
     if (!reportText) return;
     try {
-      await navigator.clipboard.writeText(reportText);
+      await navigator.clipboard.writeText(learningReportPlainText(reportText));
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {
@@ -132,6 +158,19 @@ export function BatchInsightsModal({
 
   const variants = data?.knowledge_variants;
   const report = data?.learning_report;
+
+  const variantProblems = useMemo(
+    () =>
+      (variants?.variant_problems ?? []).map((v, i) => ({
+        index: i,
+        knowledge_point: v.knowledge_point,
+        stem: v.stem,
+        answer_hint: v.answer_hint,
+        difficulty: v.difficulty,
+        variation_type: v.variation_type,
+      })),
+    [variants?.variant_problems],
+  );
 
   const tabBtn = (id: TabId, label: string, Icon: typeof BarChart3) => (
     <button
@@ -219,7 +258,7 @@ export function BatchInsightsModal({
           {error ? <p className="text-caption font-semibold text-amber-800">{error}</p> : null}
         </div>
       ) : (
-        <div className="max-h-[min(70vh,32rem)] space-y-4 overflow-y-auto overscroll-contain pr-1">
+        <div className="space-y-4">
           {error ? (
             <p className="rounded-xl border border-amber-200/60 bg-amber-50/50 px-3 py-2 text-caption text-amber-950">
               {error}
@@ -248,9 +287,7 @@ export function BatchInsightsModal({
           {tab === "report" ? (
             <div className={APP_DIALOG_PANEL}>
               <p className={APP_DIALOG_PANEL_TITLE}>学情分析报告</p>
-              <div className="mt-3 whitespace-pre-wrap text-small leading-relaxed text-ink [text-wrap:pretty]">
-                <MathPrettyText text={report?.summary_md ?? ""} />
-              </div>
+              <LearningReportBody text={report?.summary_md ?? ""} className="mt-3" />
               {(report?.weak_knowledge_ranked?.length ?? 0) > 0 ? (
                 <ReportSection title="薄弱知识点（按频次）">
                   <ul className="list-disc space-y-1 pl-4">
@@ -259,7 +296,7 @@ export function BatchInsightsModal({
                         <strong className="text-ink">{w.tag}</strong>
                         <span className="text-ink-muted"> · {w.count} 次</span>
                         {"analysis" in w && w.analysis ? (
-                          <span className="block text-caption">{String(w.analysis)}</span>
+                          <span className="block text-caption">{String(w.analysis).replace(/\*\*/g, "")}</span>
                         ) : null}
                       </li>
                     ))}
@@ -274,7 +311,7 @@ export function BatchInsightsModal({
                         <strong className="text-ink">{p.pattern}</strong>
                         <span className="text-ink-muted"> · {p.count} 次</span>
                         {"description" in p && p.description ? (
-                          <span className="block text-caption">{String(p.description)}</span>
+                          <span className="block text-caption">{String(p.description).replace(/\*\*/g, "")}</span>
                         ) : null}
                       </li>
                     ))}
@@ -323,7 +360,19 @@ export function BatchInsightsModal({
               ) : null}
               {(variants?.variant_problems?.length ?? 0) > 0 ? (
                 <div className={APP_DIALOG_PANEL}>
-                  <p className={APP_DIALOG_PANEL_TITLE}>变形题建议（可布置练习）</p>
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <p className={APP_DIALOG_PANEL_TITLE}>变形题建议（可布置练习）</p>
+                    {enableVariantDispatch ? (
+                      <VariantProblemSendTrigger
+                        problems={variantProblems}
+                        subject={subject}
+                        gradeLevel={gradeLevel}
+                        entries={entries}
+                        currentStudentName={studentName}
+                        currentSubmissionId={currentSubmissionId}
+                      />
+                    ) : null}
+                  </div>
                   <ol className="mt-3 list-decimal space-y-3 pl-5">
                     {variants!.variant_problems!.map((v, i) => (
                       <li key={`${v.knowledge_point}-${i}`} className="text-small leading-relaxed text-ink">

@@ -638,6 +638,32 @@ body {
     @apply disabled:pointer-events-none disabled:translate-y-0 disabled:bg-gray-300 disabled:shadow-none;
   }
 
+  /** 弹窗等内容区：品牌绿滚动条（与「完成」按钮同色） */
+  .scrollbar-primary-mint {
+    scrollbar-width: thin;
+    scrollbar-color: rgb(82 196 26 / 0.88) rgb(236 253 245 / 0.55);
+  }
+
+  .scrollbar-primary-mint::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  .scrollbar-primary-mint::-webkit-scrollbar-track {
+    background: rgb(244 252 240 / 0.75);
+    border-radius: 9999px;
+  }
+
+  .scrollbar-primary-mint::-webkit-scrollbar-thumb {
+    background: rgb(82 196 26 / 0.92);
+    border-radius: 9999px;
+    border: 2px solid rgb(244 252 240 / 0.85);
+  }
+
+  .scrollbar-primary-mint::-webkit-scrollbar-thumb:hover {
+    background: rgb(54 168 20 / 1);
+  }
+
   /**
    * 批改步骤条：横向约 15% / 55%（第二步，left 见 StepIndicator 内联）/ 90%；连线 ::before 自 15% 至第三步圆心 90%。
    */
