@@ -1,47 +1,81 @@
-"""判题异议：JSONL 存储与审核。不改动批改核心逻辑。"""
+"""判题异议：SQLite 存储与审核。不改动批改核心逻辑。"""
 from __future__ import annotations
 
 import json
+import sqlite3
+import threading
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+
+from core.sanitize import clip_text
+
+_lock = threading.Lock()
 
 
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
 
-def _clip(s: object, max_len: int) -> str:
-    if s is None:
-        return ""
-    t = str(s).strip().replace("\r\n", "\n")
-    return t[:max_len] if len(t) > max_len else t
-
-
 class DisputesStore:
-    def __init__(self, path: str | Path) -> None:
-        self.path = Path(path)
+    def __init__(self, db_path: str | Path) -> None:
+        self.db_path = Path(db_path)
+        self._init_db()
+        self._maybe_import_jsonl()
 
-    def _read_all(self) -> list[dict[str, Any]]:
-        if not self.path.is_file():
-            return []
-        rows: list[dict[str, Any]] = []
-        with open(self.path, encoding="utf-8") as fh:
-            for line in fh:
-                line = line.strip()
-                if not line:
-                    continue
-                try:
-                    rows.append(json.loads(line))
-                except json.JSONDecodeError:
-                    continue
-        return rows
+    def _connect(self) -> sqlite3.Connection:
+        conn = sqlite3.connect(self.db_path, timeout=30)
+        conn.row_factory = sqlite3.Row
+        return conn
 
-    def _write_all(self, rows: list[dict[str, Any]]) -> None:
-        with open(self.path, "w", encoding="utf-8") as fh:
-            for r in rows:
-                fh.write(json.dumps(r, ensure_ascii=False) + "\n")
+    def _init_db(self) -> None:
+        with _lock:
+            with self._connect() as conn:
+                conn.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS disputes (
+                        id TEXT PRIMARY KEY,
+                        created_at TEXT NOT NULL,
+                        status TEXT NOT NULL,
+                        payload_json TEXT NOT NULL
+                    )
+                    """
+                )
+                conn.execute("CREATE INDEX IF NOT EXISTS idx_disputes_status ON disputes(status)")
+                conn.execute("CREATE INDEX IF NOT EXISTS idx_disputes_created ON disputes(created_at DESC)")
+
+    def _maybe_import_jsonl(self) -> None:
+        jsonl = self.db_path.with_suffix(".jsonl")
+        if not jsonl.is_file():
+            return
+        try:
+            text = jsonl.read_text(encoding="utf-8")
+        except UnicodeDecodeError:
+            text = jsonl.read_text(encoding="utf-8", errors="ignore")
+        with _lock:
+            with self._connect() as conn:
+                n = conn.execute("SELECT COUNT(*) FROM disputes").fetchone()[0]
+                if n > 0:
+                    return
+                for line in text.splitlines():
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        rec = json.loads(line)
+                    except json.JSONDecodeError:
+                        continue
+                    rid = rec.get("id") or uuid.uuid4().hex
+                    conn.execute(
+                        "INSERT OR IGNORE INTO disputes (id, created_at, status, payload_json) VALUES (?, ?, ?, ?)",
+                        (
+                            rid,
+                            rec.get("created_at") or _now_iso(),
+                            rec.get("status") or "pending",
+                            json.dumps(rec, ensure_ascii=False),
+                        ),
+                    )
 
     def create(self, payload: dict[str, Any]) -> dict[str, Any]:
         user_feedback = (payload.get("user_feedback") or "").strip()
@@ -52,32 +86,36 @@ class DisputesStore:
             "id": uuid.uuid4().hex,
             "created_at": _now_iso(),
             "status": "pending",
-            "submitter_role": _clip(payload.get("submitter_role"), 16) or "student",
+            "submitter_role": clip_text(payload.get("submitter_role"), 16) or "student",
             "student_grade": payload.get("student_grade"),
-            "feedback_scope": _clip(payload.get("feedback_scope"), 24) or "question",
-            "subject": _clip(payload.get("subject"), 16),
-            "dimension_key": _clip(payload.get("dimension_key"), 160),
-            "dimension_label": _clip(payload.get("dimension_label"), 400),
-            "status_snapshot": _clip(payload.get("status"), 40),
+            "feedback_scope": clip_text(payload.get("feedback_scope"), 24) or "question",
+            "subject": clip_text(payload.get("subject"), 16),
+            "dimension_key": clip_text(payload.get("dimension_key"), 160),
+            "dimension_label": clip_text(payload.get("dimension_label"), 400),
+            "status_snapshot": clip_text(payload.get("status"), 40),
             "value": payload.get("value"),
             "max": payload.get("max"),
-            "detail_excerpt": _clip(payload.get("detail_excerpt"), 1200),
-            "user_feedback": _clip(user_feedback, 4000),
-            "job_file_base": _clip(payload.get("job_file_base"), 160),
-            "subject_title": _clip(payload.get("subject_title"), 80),
-            "overall_label": _clip(payload.get("overall_label"), 200),
+            "detail_excerpt": clip_text(payload.get("detail_excerpt"), 1200),
+            "user_feedback": clip_text(user_feedback, 4000),
+            "job_file_base": clip_text(payload.get("job_file_base"), 160),
+            "subject_title": clip_text(payload.get("subject_title"), 80),
+            "overall_label": clip_text(payload.get("overall_label"), 200),
             "score_percent": payload.get("score_percent"),
-            "image_ref": _clip(payload.get("image_ref"), 240),
-            "image_url": _clip(payload.get("image_url"), 500),
-            "history_entry_id": _clip(payload.get("history_entry_id"), 80),
-            "local_file_name": _clip(payload.get("local_file_name"), 240),
+            "image_ref": clip_text(payload.get("image_ref"), 240),
+            "image_url": clip_text(payload.get("image_url"), 500),
+            "history_entry_id": clip_text(payload.get("history_entry_id"), 80),
+            "local_file_name": clip_text(payload.get("local_file_name"), 240),
             "batch_index": payload.get("batch_index"),
             "batch_total": payload.get("batch_total"),
             "teacher_reply": "",
             "reviewed_at": "",
         }
-        with open(self.path, "a", encoding="utf-8") as fh:
-            fh.write(json.dumps(record, ensure_ascii=False) + "\n")
+        with _lock:
+            with self._connect() as conn:
+                conn.execute(
+                    "INSERT INTO disputes (id, created_at, status, payload_json) VALUES (?, ?, ?, ?)",
+                    (record["id"], record["created_at"], record["status"], json.dumps(record, ensure_ascii=False)),
+                )
         return record
 
     def list_items(
@@ -87,40 +125,55 @@ class DisputesStore:
         ids: list[str] | None = None,
         limit: int = 200,
     ) -> list[dict[str, Any]]:
-        rows = self._read_all()
-        if ids:
-            id_set = set(ids)
-            rows = [r for r in rows if r.get("id") in id_set]
+        clauses: list[str] = []
+        params: list[Any] = []
         if status:
-            rows = [r for r in rows if r.get("status") == status]
-        rows.sort(key=lambda r: r.get("created_at", ""), reverse=True)
-        return rows[:limit]
+            clauses.append("status = ?")
+            params.append(status)
+        if ids:
+            placeholders = ",".join("?" * len(ids))
+            clauses.append(f"id IN ({placeholders})")
+            params.extend(ids)
+        where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+        sql = f"SELECT payload_json FROM disputes {where} ORDER BY created_at DESC LIMIT ?"
+        params.append(limit)
+        with _lock:
+            with self._connect() as conn:
+                rows = conn.execute(sql, params).fetchall()
+        out: list[dict[str, Any]] = []
+        for row in rows:
+            try:
+                out.append(json.loads(row["payload_json"]))
+            except json.JSONDecodeError:
+                continue
+        return out
 
     def review(self, dispute_id: str, action: str, teacher_reply: str = "") -> dict[str, Any]:
-        rows = self._read_all()
-        found = None
-        for r in rows:
-            if r.get("id") == dispute_id:
-                found = r
-                break
-        if not found:
-            raise ValueError("未找到该申诉")
-        if found.get("status") != "pending":
-            raise ValueError("该申诉已处理")
-
-        if action == "confirm":
-            found["status"] = "confirmed"
-        elif action == "reject":
-            if len(teacher_reply.strip()) < 4:
-                raise ValueError("驳回时请至少用 4 个字说明理由")
-            found["status"] = "rejected"
-        else:
-            raise ValueError("无效操作")
-
-        found["teacher_reply"] = _clip(teacher_reply, 2000)
-        found["reviewed_at"] = _now_iso()
-        self._write_all(rows)
+        with _lock:
+            with self._connect() as conn:
+                row = conn.execute("SELECT payload_json FROM disputes WHERE id = ?", (dispute_id,)).fetchone()
+                if not row:
+                    raise ValueError("未找到该申诉")
+                found = json.loads(row["payload_json"])
+                if found.get("status") != "pending":
+                    raise ValueError("该申诉已处理")
+                if action == "confirm":
+                    found["status"] = "confirmed"
+                elif action == "reject":
+                    if len(teacher_reply.strip()) < 4:
+                        raise ValueError("驳回时请至少用 4 个字说明理由")
+                    found["status"] = "rejected"
+                else:
+                    raise ValueError("无效操作")
+                found["teacher_reply"] = clip_text(teacher_reply, 2000)
+                found["reviewed_at"] = _now_iso()
+                conn.execute(
+                    "UPDATE disputes SET status = ?, payload_json = ? WHERE id = ?",
+                    (found["status"], json.dumps(found, ensure_ascii=False), dispute_id),
+                )
         return found
 
     def count_pending(self) -> int:
-        return sum(1 for r in self._read_all() if r.get("status") == "pending")
+        with _lock:
+            with self._connect() as conn:
+                return int(conn.execute("SELECT COUNT(*) FROM disputes WHERE status = 'pending'").fetchone()[0])

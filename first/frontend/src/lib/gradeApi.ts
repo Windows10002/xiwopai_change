@@ -1,5 +1,6 @@
 import type { ErrorRegionPct, GradingResultDetail } from "@/types/grading";
 import { buildScoringStrategyDetail } from "@/lib/scoringStrategyText";
+import { apiFetch, parseApiJson } from "@/lib/apiClient";
 
 type ApiGradePayload = {
   ok: boolean;
@@ -412,11 +413,14 @@ export type GradeRequestContext = {
   essayPromptText?: string;
   /** 英语：题目照片（选填） */
   essayPromptFile?: File;
+  /** 可选：取消长时间批改 */
+  signal?: AbortSignal;
 };
+
+const GRADE_TIMEOUT_MS = 5 * 60 * 1000;
 
 /**
  * 调用 Flask `/api/grade`：multipart field `file` + `subject`。
- * 开发环境通过 Vite proxy 转发；生产环境与 Flask 同域。
  */
 export async function submitGrade(
   file: File,
@@ -437,33 +441,35 @@ export async function submitGrade(
   if (ep) body.append("essay_prompt", ep);
   if (ctx?.essayPromptFile) body.append("prompt_file", ctx.essayPromptFile);
 
-  const res = await fetch("/api/grade", {
-    method: "POST",
-    body,
-  });
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), GRADE_TIMEOUT_MS);
+  const onAbort = () => controller.abort();
+  ctx?.signal?.addEventListener("abort", onAbort);
 
-  let json: ApiGradePayload;
   try {
-    json = (await res.json()) as ApiGradePayload;
-  } catch {
-    throw new Error("服务器返回了非 JSON 数据，请确认已启动后端并访问正确端口。");
-  }
+    const res = await apiFetch("/api/grade", {
+      method: "POST",
+      body,
+      signal: ctx?.signal ?? controller.signal,
+    });
 
-  if (!res.ok || !json.ok) {
-    throw new Error(json.message || `批改请求失败（HTTP ${res.status}）`);
-  }
+    const json = await parseApiJson<ApiGradePayload & { result?: Record<string, unknown> }>(res);
+    const raw = json.result;
+    if (!raw || typeof raw !== "object") {
+      throw new Error("响应缺少批改结果");
+    }
 
-  const raw = json.result;
-  if (!raw || typeof raw !== "object") {
-    throw new Error("响应缺少批改结果");
+    const detail = mapApiResultToDetail(subject, raw as Record<string, unknown>);
+    detail.scoringStrategyDetail = buildScoringStrategyDetail(subject, detail);
+    const imageUrl = json.image_url || "";
+    return { detail, imageUrl };
+  } catch (e) {
+    if (e instanceof DOMException && e.name === "AbortError") {
+      throw new Error("批改已取消或超时，请重试。");
+    }
+    throw e;
+  } finally {
+    window.clearTimeout(timeout);
+    ctx?.signal?.removeEventListener("abort", onAbort);
   }
-
-  if (raw.error) {
-    throw new Error(String(raw.comments || "批改失败"));
-  }
-
-  const detail = mapApiResultToDetail(subject, raw as Record<string, unknown>);
-  detail.scoringStrategyDetail = buildScoringStrategyDetail(subject, detail);
-  const imageUrl = json.image_url || "";
-  return { detail, imageUrl };
 }

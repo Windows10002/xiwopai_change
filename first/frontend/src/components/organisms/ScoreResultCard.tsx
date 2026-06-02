@@ -381,7 +381,7 @@ export function ScoreResultCard({
 
   return (
     <section
-      className={`glass-panel relative flex min-h-[320px] flex-1 flex-col rounded-card md:min-h-0 md:h-full ${isStudentUi ? "animate-bounce-in stagger-2" : ""}`}
+      className={`glass-panel relative flex h-full min-h-[min(320px,50vh)] min-w-0 max-w-full flex-col overflow-hidden rounded-card md:min-h-0 ${isStudentUi ? "animate-bounce-in stagger-2" : ""}`}
     >
       <header className="flex shrink-0 flex-col gap-3 border-b border-white/30 px-5 py-4 md:px-6">
         <div>
@@ -440,7 +440,7 @@ export function ScoreResultCard({
 
       <div
         className={[
-          "flex min-h-0 flex-1 flex-col px-5 py-6 md:px-6",
+          "flex min-h-0 flex-1 flex-col overflow-hidden px-5 py-6 md:px-6",
           isGrading ? "min-h-[min(52vh,26rem)] md:min-h-0" : "",
         ].join(" ")}
       >

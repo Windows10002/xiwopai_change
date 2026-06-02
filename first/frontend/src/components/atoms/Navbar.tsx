@@ -114,7 +114,6 @@ export function Navbar({
             <>
               <NavItem to="/math">数学批改</NavItem>
               <NavItem to="/english">英语批改</NavItem>
-              <NavItem to="/chinese">语文</NavItem>
             </>
           ) : null}
           {showAnalytics ? <NavItem to="/student-analytics">学生学情</NavItem> : null}

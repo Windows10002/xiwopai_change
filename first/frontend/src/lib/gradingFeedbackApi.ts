@@ -1,3 +1,5 @@
+import { apiFetch, parseApiJson } from "@/lib/apiClient";
+
 export type GradingFeedbackScope = "question" | "whole_paper";
 
 /** 与当前左侧预览/批改任务关联的追溯信息（供学习模块与人工抽检） */
@@ -71,18 +73,9 @@ export function traceToFeedbackFields(trace: GradingFeedbackTrace | undefined): 
  * 提交批改反馈（逐题 / 整卷）→ Flask `/api/grading-feedback`，写入项目根 `grading_feedback.jsonl`。
  */
 export async function submitGradingFeedback(payload: GradingFeedbackPayload): Promise<void> {
-  const res = await fetch("/api/grading-feedback", {
+  const res = await apiFetch("/api/grading-feedback", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
   });
-  let body: { ok?: boolean; message?: string } = {};
-  try {
-    body = (await res.json()) as { ok?: boolean; message?: string };
-  } catch {
-    /* ignore */
-  }
-  if (!res.ok || !body.ok) {
-    throw new Error(body.message || `反馈提交失败（HTTP ${res.status}）`);
-  }
+  await parseApiJson(res);
 }

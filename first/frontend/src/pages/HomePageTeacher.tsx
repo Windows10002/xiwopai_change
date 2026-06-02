@@ -91,7 +91,7 @@ export function HomePageTeacher() {
               </p>
             </div>
 
-            <div className="mx-auto mt-8 grid w-full max-w-4xl grid-cols-1 gap-4 md:mt-10 md:grid-cols-2 lg:grid-cols-3 md:gap-5">
+            <div className="mx-auto mt-8 grid w-full max-w-2xl grid-cols-1 gap-4 sm:grid-cols-2 md:mt-10 md:gap-5">
               <SubjectCard
                 title="数学作业"
                 description="拍照上传数学题，查看逐题过程分与薄弱知识点。"
@@ -101,11 +101,6 @@ export function HomePageTeacher() {
                 title="英语作文"
                 description="上传作文稿纸，获取多维过程分、亮点与纠错建议。"
                 to="/english"
-              />
-              <SubjectCard
-                title="语文作文"
-                description="即将上线：敬请期待语文作文智能批改。"
-                to="/chinese"
               />
             </div>
 

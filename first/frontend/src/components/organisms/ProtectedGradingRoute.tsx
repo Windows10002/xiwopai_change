@@ -4,6 +4,7 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Lock, ShieldCheck } from "lucide-react";
 
 import { CUTE_ICON } from "@/components/atoms/cuteIcon";
+import { loadAuthToken } from "@/lib/apiClient";
 import {
   GUARDIAN_DEMO_PASSPHRASE,
   GRADING_MIN_GRADE,
@@ -45,7 +46,7 @@ export function ProtectedGradingRoute({ children }: ProtectedGradingRouteProps) 
     setSession(loadSession());
   }, [location.pathname, location.key]);
 
-  if (!session) {
+  if (!session || !loadAuthToken()) {
     return (
       <div className="page-bg-hero-stunning flex min-h-screen flex-col items-center justify-center px-4 py-16">
         <div className="w-full max-w-md rounded-[1.25rem] border border-black/[0.08] bg-white/95 p-8 text-center shadow-card ring-1 ring-primary/10">

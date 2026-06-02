@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { Link, useLocation } from "react-router-dom";
 
+import { loadAuthToken } from "@/lib/apiClient";
 import { useAppSession } from "@/hooks/useAppSession";
 import { deniedMessage, hasPermission, ROLE_LABEL, type Permission } from "@/lib/rolePermissions";
 
@@ -18,7 +19,7 @@ export function ProtectedRoleRoute({ children, anyOf, loginRedirect }: Protected
   const allowed = anyOf.some((p) => hasPermission(session, p));
   const needPerm = anyOf[0];
 
-  if (!session) {
+  if (!session || !loadAuthToken()) {
     return (
       <div className="page-bg-hero-stunning flex min-h-screen flex-col items-center justify-center px-4 py-16">
         <div className="w-full max-w-md rounded-[1.25rem] border border-black/[0.08] bg-white/95 p-8 text-center shadow-card">

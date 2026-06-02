@@ -1,0 +1,32 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+
+# Secrets & local env
+.env
+.env.local
+
+# Runtime data
+uploads/
+*.jsonl
+grading_disputes.db
+
+# IDE
+.idea/
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Frontend (see frontend/.gitignore for node_modules)
+frontend/dist/

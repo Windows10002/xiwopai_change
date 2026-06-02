@@ -1,4 +1,5 @@
 import type { GradingResultDetail } from "@/types/grading";
+import { apiFetch, parseApiJson } from "@/lib/apiClient";
 
 export type BatchInsightItemPayload = {
   file_name: string;
@@ -270,9 +271,8 @@ export async function fetchBatchInsights(params: {
   analysisMode?: "batch" | "student_personalized";
   studentName?: string;
 }): Promise<BatchInsightsResponse> {
-  const res = await fetch("/api/grading/batch-insights", {
+  const res = await apiFetch("/api/grading/batch-insights", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       subject: params.subject,
       items: params.items,
@@ -285,9 +285,5 @@ export async function fetchBatchInsights(params: {
     }),
   });
 
-  const data = (await res.json()) as BatchInsightsResponse & { message?: string };
-  if (!res.ok || !data.ok) {
-    throw new Error(data.message ?? `学情分析请求失败（${res.status}）`);
-  }
-  return data;
+  return parseApiJson<BatchInsightsResponse>(res);
 }

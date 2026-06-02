@@ -29,7 +29,7 @@ type HomeworkPreviewProps = {
   paperMarkGrid?: { columns: number } | null;
   /** 主预览是否叠标注；默认 false，避免与纸面题位不一致造成误解 */
   showPaperMarksOnMain?: boolean;
-  /** 与左侧栏同高伸展（大屏与右侧解析栏对齐） */
+  /** 在父级 flex 区域内按比例铺满（保持宽高比，不裁切） */
   fillColumn?: boolean;
 };
 
@@ -352,10 +352,12 @@ export function HomeworkPreview({
   return (
     <>
       <div
-        className={`glass-panel flex min-h-0 flex-col overflow-hidden rounded-card ${fillColumn ? "min-h-[18rem] flex-1 md:min-h-0" : ""}`}
+        className={`glass-panel flex min-h-0 w-full flex-col overflow-hidden rounded-card ${fillColumn ? "h-full min-h-0 flex-1" : ""}`}
       >
-        <div className="relative flex min-h-0 flex-1 flex-col bg-gradient-to-b from-[#f4fcf0]/25 via-white/15 to-white/10 backdrop-blur-sm">
-          <div className="relative flex min-h-0 flex-1 w-full items-center justify-center px-1 py-1 sm:px-2 sm:py-2">
+        <div className={`relative flex min-h-0 flex-col ${fillColumn ? "h-full min-h-0 flex-1" : ""}`}>
+          <div
+            className={`relative w-full ${fillColumn ? "min-h-0 flex-1 overflow-hidden" : "flex items-center justify-center px-2 py-2 sm:px-3"}`}
+          >
             {imgFailed ? (
               <div className="flex min-h-[200px] flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-white/40 bg-white/30 px-4 text-center backdrop-blur-sm">
                 <p className="text-small font-semibold text-ink">图片未能加载</p>
@@ -367,25 +369,25 @@ export function HomeworkPreview({
                 alt="作业预览"
                 className={
                   fillColumn
-                    ? "relative z-0 max-h-[min(78vh,56rem)] min-h-[14rem] w-full max-w-full flex-1 object-contain object-center md:min-h-[20rem]"
+                    ? "absolute inset-0 z-0 m-auto h-full w-full max-h-full max-w-full object-contain object-center p-1 sm:p-2"
                     : "relative z-0 max-h-[min(72vh,52rem)] w-full max-w-full object-contain object-center"
                 }
                 onError={() => setImgFailed(true)}
               />
             )}
             {!imgFailed ? (
-              <div className="pointer-events-none absolute left-0 top-0 z-10 h-full w-full">
+              <div className="pointer-events-none absolute inset-0 z-10">
                 <ErrorOverlay errorRegions={errorRegions} />
                 {showMarksMain && marks ? <PaperMarksOverlay paperMarks={marks} paperMarkGrid={grid} /> : null}
               </div>
             ) : null}
           </div>
           {!imgFailed ? (
-            <div className="flex flex-wrap items-center justify-center gap-3 border-t border-white/35 bg-white/25 px-3 py-3 backdrop-blur-md sm:gap-4 sm:px-4">
+            <div className={`flex shrink-0 flex-wrap items-center justify-center gap-2 border-t border-white/35 bg-gradient-to-b from-[#f4fcf0]/25 via-white/15 to-white/10 px-3 backdrop-blur-md sm:gap-3 sm:px-4 ${fillColumn ? "py-2" : "py-3 sm:gap-4"}`}>
               <button
                 type="button"
                 onClick={() => setZoomOpen(true)}
-                className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-white/45 bg-white/40 px-5 py-2.5 text-small font-extrabold text-ink shadow-sm backdrop-blur-sm transition hover:border-primary/35 hover:bg-white/55 hover:text-[#006D41]"
+                className={`inline-flex items-center gap-2 rounded-xl border border-white/45 bg-white/40 px-4 py-2 text-small font-extrabold text-ink shadow-sm backdrop-blur-sm transition hover:border-primary/35 hover:bg-white/55 hover:text-[#006D41] ${fillColumn ? "min-h-10" : "min-h-11 px-5 py-2.5"}`}
               >
                 <ImageIcon className="h-5 w-5 shrink-0" {...CUTE_ICON} aria-hidden />
                 查看原图
@@ -394,7 +396,8 @@ export function HomeworkPreview({
                 type="button"
                 onClick={() => setPinned((v) => !v)}
                 className={[
-                  "inline-flex min-h-11 items-center gap-2 rounded-xl border px-5 py-2.5 text-small font-extrabold shadow-sm transition",
+                  "inline-flex items-center gap-2 rounded-xl border px-4 py-2 text-small font-extrabold shadow-sm transition",
+                  fillColumn ? "min-h-10" : "min-h-11 px-5 py-2.5",
                   pinned
                     ? "border-brand bg-brand text-white hover:bg-brand-hover"
                     : "border-white/45 bg-white/40 text-ink backdrop-blur-sm hover:border-primary/35 hover:bg-white/55 hover:text-[#006D41]",

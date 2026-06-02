@@ -1,3 +1,5 @@
+import { apiFetch, parseApiJson } from "@/lib/apiClient";
+
 export type FeedbackDashboardData = {
   ok: boolean;
   total: number;
@@ -9,10 +11,6 @@ export type FeedbackDashboardData = {
 };
 
 export async function fetchFeedbackDashboard(): Promise<FeedbackDashboardData> {
-  const res = await fetch("/api/grading-feedback");
-  const data = (await res.json()) as FeedbackDashboardData;
-  if (!res.ok || !data.ok) {
-    throw new Error(data.message ?? `加载失败（${res.status}）`);
-  }
-  return data;
+  const res = await apiFetch("/api/grading-feedback");
+  return parseApiJson<FeedbackDashboardData>(res);
 }

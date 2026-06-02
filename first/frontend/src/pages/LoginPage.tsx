@@ -3,6 +3,7 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import { CheckCircle2, Eye, EyeOff, Loader2, Lock, UserRound } from "lucide-react";
 import { CUTE_ICON } from "@/components/atoms/cuteIcon";
 import { IpMascotWaveWelcome } from "@/components/atoms/IpMascot";
+import { loginApi, saveAuthToken } from "@/lib/apiClient";
 import type { AppUserRole } from "@/lib/appSession";
 import {
   GRADING_MIN_GRADE,
@@ -10,10 +11,9 @@ import {
   newGuardianAllowanceExpiry,
   saveSession,
   studentNeedsGuardianApproval,
-  verifyGuardianPassphrase,
 } from "@/lib/appSession";
 
-/** 演示用正确账号（任意其它组合将提示失败文案） */
+/** 演示用账号提示（实际校验在后端） */
 const DEMO_ACCOUNT = "13800138000";
 const DEMO_PASSWORD = "123456";
 
@@ -99,43 +99,45 @@ export function LoginPage() {
     return Object.keys(next).length === 0;
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     resetMessages();
     if (!validateFields()) return;
 
     setStatus("loading");
+    try {
+      const data = await loginApi({
+        account: account.trim(),
+        password,
+        role: loginRole,
+        ...(loginRole === "student" ? { student_grade: studentGrade } : {}),
+        ...(loginRole === "student" && studentNeedsGuardianApproval(studentGrade)
+          ? { guardian_code: guardianCode.trim() }
+          : {}),
+      });
+      if (!data.token) throw new Error("登录响应缺少令牌");
 
-    window.setTimeout(() => {
-      const ok = account.trim() === DEMO_ACCOUNT && password === DEMO_PASSWORD;
-      if (ok) {
-        if (loginRole === "student" && studentNeedsGuardianApproval(studentGrade)) {
-          if (!verifyGuardianPassphrase(guardianCode)) {
-            setStatus("idle");
-            setGlobalError("家长或教师确认码不正确，小学及更低年级须由家长或教师代为确认后方可登录。");
-            return;
-          }
-        }
-        setStatus("success");
-        if (loginRole === "teacher") {
-          saveSession({ role: "teacher", studentGrade: null, gradingAllowanceExpiresAt: 0 }, remember);
-        } else if (loginRole === "parent") {
-          saveSession({ role: "parent", studentGrade: null, gradingAllowanceExpiresAt: 0 }, remember);
-        } else if (loginRole === "admin") {
-          saveSession({ role: "admin", studentGrade: null, gradingAllowanceExpiresAt: 0 }, remember);
-        } else {
-          const allowance = studentNeedsGuardianApproval(studentGrade) ? newGuardianAllowanceExpiry() : 0;
-          saveSession({ role: "student", studentGrade, gradingAllowanceExpiresAt: allowance }, remember);
-        }
-        const nextRaw = new URLSearchParams(location.search).get("redirect");
-        const next =
-          nextRaw && nextRaw.startsWith("/") && !nextRaw.startsWith("//") ? nextRaw : "/";
-        window.setTimeout(() => navigate(next), 1600);
+      saveAuthToken(data.token, remember);
+      setStatus("success");
+
+      if (loginRole === "teacher") {
+        saveSession({ role: "teacher", studentGrade: null, gradingAllowanceExpiresAt: 0 }, remember);
+      } else if (loginRole === "parent") {
+        saveSession({ role: "parent", studentGrade: null, gradingAllowanceExpiresAt: 0 }, remember);
+      } else if (loginRole === "admin") {
+        saveSession({ role: "admin", studentGrade: null, gradingAllowanceExpiresAt: 0 }, remember);
       } else {
-        setStatus("idle");
-        setGlobalError("手机号或密码错误，请重新输入");
+        const allowance = studentNeedsGuardianApproval(studentGrade) ? newGuardianAllowanceExpiry() : 0;
+        saveSession({ role: "student", studentGrade, gradingAllowanceExpiresAt: allowance }, remember);
       }
-    }, 900);
+
+      const nextRaw = new URLSearchParams(location.search).get("redirect");
+      const next = nextRaw && nextRaw.startsWith("/") && !nextRaw.startsWith("//") ? nextRaw : "/";
+      window.setTimeout(() => navigate(next), 800);
+    } catch (err) {
+      setStatus("idle");
+      setGlobalError(err instanceof Error ? err.message : "登录失败，请稍后重试");
+    }
   };
 
   const busy = status === "loading" || status === "success";

@@ -106,6 +106,8 @@ type UploadDropzoneProps = {
   status?: UploadPanelStatus;
   /** 上传流程进行中时禁止再次拖入 */
   locked?: boolean;
+  /** 批改结果页：压缩高度，把空间留给下方原图 */
+  compact?: boolean;
 };
 
 /**
@@ -117,6 +119,7 @@ export function UploadDropzone({
   onFiles,
   status = { phase: "idle" },
   locked = false,
+  compact = false,
 }: UploadDropzoneProps) {
   const [dragging, setDragging] = useState(false);
   const [sourcePickerOpen, setSourcePickerOpen] = useState(false);
@@ -297,7 +300,8 @@ export function UploadDropzone({
       onDragLeave={onDragLeave}
       onDrop={onDrop}
       className={[
-        "relative cursor-pointer rounded-card px-5 py-10 text-center transition-[border-width,background-color,border-color,box-shadow,transform] duration-button ease-smooth hover:-translate-y-0.5 md:px-8 md:py-12",
+        "relative cursor-pointer rounded-card text-center transition-[border-width,background-color,border-color,box-shadow,transform] duration-button ease-smooth hover:-translate-y-0.5",
+        compact ? "shrink-0 px-4 py-4 md:px-5 md:py-5" : "px-5 py-10 md:px-8 md:py-12",
         borderClasses,
         locked && !busy ? "pointer-events-none opacity-80" : "",
         /* 弹层在组件内部 z-index 无法压过后序兄弟（如「开始批改」），整区需提升层级 */
@@ -424,11 +428,11 @@ export function UploadDropzone({
           ) : null}
         </div>
       ) : !sourcePickerOpen ? (
-        <div className="mx-auto flex w-full max-w-md flex-col items-center gap-3">
+        <div className={`mx-auto flex w-full max-w-md flex-col items-center ${compact ? "gap-2" : "gap-3"}`}>
           <div
             role="button"
             tabIndex={0}
-            className={`flex w-full flex-col items-center gap-3 px-1 py-0.5 ${modalZoneClass}`}
+            className={`flex w-full flex-col items-center ${compact ? "gap-2" : "gap-3"} px-1 py-0.5 ${modalZoneClass}`}
             onClick={openModalFromZone}
             onKeyDown={(e) => {
               if (e.key !== "Enter" && e.key !== " ") return;
@@ -438,13 +442,17 @@ export function UploadDropzone({
           >
             <span
               className={[
-                "flex h-20 w-20 items-center justify-center rounded-[1.65rem] border text-brand shadow-sm transition-all duration-button ease-smooth md:h-24 md:w-24",
+                "flex items-center justify-center rounded-[1.65rem] border text-brand shadow-sm transition-all duration-button ease-smooth",
+                compact ? "h-14 w-14" : "h-20 w-20 md:h-24 md:w-24",
                 dragging ? "border-brand bg-white/45 shadow-card ring-4 ring-primary/20 backdrop-blur-sm" : "border-brand/25 bg-white/35 ring-2 ring-primary/10 backdrop-blur-sm",
               ].join(" ")}
             >
-              <ImagePlus className="h-10 w-10 md:h-12 md:w-12" {...CUTE_ICON} aria-hidden />
+              <ImagePlus className={compact ? "h-7 w-7" : "h-10 w-10 md:h-12 md:w-12"} {...CUTE_ICON} aria-hidden />
             </span>
-            <p className="text-body font-semibold text-gray-900">{title}</p>
+            <p className={compact ? "text-small font-semibold text-gray-900" : "text-body font-semibold text-gray-900"}>{title}</p>
+            {compact ? (
+              <p className="text-caption text-ink-muted">{hint}</p>
+            ) : (
             <p className="text-small text-ink-muted">
               {hint}
               <span
@@ -460,6 +468,7 @@ export function UploadDropzone({
                   : "点上方说明区或底部 π 提示可打开添加方式；点「选择图片」「选择文件夹」直接打开系统选择；两按钮之间的空白也可打开添加方式。支持拖入。"}
               </span>
             </p>
+            )}
           </div>
           <div
             className="mt-1 flex min-h-[2.75rem] w-full flex-wrap items-center justify-center gap-2 px-1"
@@ -491,6 +500,7 @@ export function UploadDropzone({
               选择文件夹
             </button>
           </div>
+          {!compact ? (
           <div
             role="button"
             tabIndex={0}
@@ -507,6 +517,7 @@ export function UploadDropzone({
               π 指着上方上传区：先把清晰作业照放进来，我再帮你批改～
             </p>
           </div>
+          ) : null}
         </div>
       ) : null}
     </div>

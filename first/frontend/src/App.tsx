@@ -1,67 +1,101 @@
-import { useEffect } from "react";
-import { Routes, Route, useLocation } from "react-router-dom";
+import { lazy, Suspense, useEffect } from "react";
+import { Routes, Route } from "react-router-dom";
 import { HomePage } from "@/pages/HomePage";
 import { EnglishGradingPage } from "@/pages/EnglishGradingPage";
 import { MathGradingPage } from "@/pages/MathGradingPage";
 import { LoginPage } from "@/pages/LoginPage";
-import { SettingsPage } from "@/pages/SettingsPage";
-import { WrongBookPage } from "@/pages/WrongBookPage";
 import { ProtectedRoleRoute } from "@/components/organisms/ProtectedRoleRoute";
-import { StudentAnalyticsPage } from "@/pages/StudentAnalyticsPage";
-import { ClassAnalyticsPage } from "@/pages/ClassAnalyticsPage";
-import { FeedbackDashboardPage } from "@/pages/FeedbackDashboardPage";
-import { ChineseGradingPage } from "@/pages/ChineseGradingPage";
-import { APP_PREFS_CHANGED, loadUserPreferences, syncUserPreferencesToDom } from "@/lib/userPreferences";
+import { APP_PREFS_CHANGED, loadUserPreferences, saveUserPreferences, syncUserPreferencesToDom } from "@/lib/userPreferences";
+
+const SettingsPage = lazy(() => import("@/pages/SettingsPage").then((m) => ({ default: m.SettingsPage })));
+const WrongBookPage = lazy(() => import("@/pages/WrongBookPage").then((m) => ({ default: m.WrongBookPage })));
+const StudentAnalyticsPage = lazy(() =>
+  import("@/pages/StudentAnalyticsPage").then((m) => ({ default: m.StudentAnalyticsPage })),
+);
+const ClassAnalyticsPage = lazy(() =>
+  import("@/pages/ClassAnalyticsPage").then((m) => ({ default: m.ClassAnalyticsPage })),
+);
+const FeedbackDashboardPage = lazy(() =>
+  import("@/pages/FeedbackDashboardPage").then((m) => ({ default: m.FeedbackDashboardPage })),
+);
+
+function PageFallback() {
+  return (
+    <div className="flex min-h-[40vh] items-center justify-center text-small text-ink-muted" role="status">
+      加载中…
+    </div>
+  );
+}
+
+function Lazy({ children }: { children: React.ReactNode }) {
+  return <Suspense fallback={<PageFallback />}>{children}</Suspense>;
+}
 
 export default function App() {
-  const location = useLocation();
-
   useEffect(() => {
     const apply = () => syncUserPreferencesToDom(loadUserPreferences());
     apply();
+    if (typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      const p = loadUserPreferences();
+      if (!p.reduceMotion) saveUserPreferences({ reduceMotion: true });
+    }
     window.addEventListener(APP_PREFS_CHANGED, apply);
     return () => window.removeEventListener(APP_PREFS_CHANGED, apply);
   }, []);
 
   return (
-    <div key={location.pathname} className="animate-page-fade min-h-screen">
+    <div className="animate-page-fade flex min-h-dvh min-h-screen flex-1 flex-col">
       <Routes>
         <Route path="/" element={<HomePage />} />
         <Route path="/english" element={<EnglishGradingPage />} />
         <Route path="/math" element={<MathGradingPage />} />
-        <Route path="/chinese" element={<ChineseGradingPage />} />
         <Route path="/login" element={<LoginPage />} />
-        <Route path="/settings" element={<SettingsPage />} />
+        <Route
+          path="/settings"
+          element={
+            <Lazy>
+              <SettingsPage />
+            </Lazy>
+          }
+        />
         <Route
           path="/wrong-book"
           element={
-            <ProtectedRoleRoute anyOf={["wrong_book"]}>
-              <WrongBookPage />
-            </ProtectedRoleRoute>
+            <Lazy>
+              <ProtectedRoleRoute anyOf={["wrong_book"]}>
+                <WrongBookPage />
+              </ProtectedRoleRoute>
+            </Lazy>
           }
         />
         <Route
           path="/student-analytics"
           element={
-            <ProtectedRoleRoute anyOf={["analytics.student", "analytics.class"]} loginRedirect="/student-analytics">
-              <StudentAnalyticsPage />
-            </ProtectedRoleRoute>
+            <Lazy>
+              <ProtectedRoleRoute anyOf={["analytics.student", "analytics.class"]} loginRedirect="/student-analytics">
+                <StudentAnalyticsPage />
+              </ProtectedRoleRoute>
+            </Lazy>
           }
         />
         <Route
           path="/class-analytics"
           element={
-            <ProtectedRoleRoute anyOf={["analytics.class"]}>
-              <ClassAnalyticsPage />
-            </ProtectedRoleRoute>
+            <Lazy>
+              <ProtectedRoleRoute anyOf={["analytics.class"]}>
+                <ClassAnalyticsPage />
+              </ProtectedRoleRoute>
+            </Lazy>
           }
         />
         <Route
           path="/feedback-dashboard"
           element={
-            <ProtectedRoleRoute anyOf={["feedback.dashboard"]}>
-              <FeedbackDashboardPage />
-            </ProtectedRoleRoute>
+            <Lazy>
+              <ProtectedRoleRoute anyOf={["feedback.dashboard"]}>
+                <FeedbackDashboardPage />
+              </ProtectedRoleRoute>
+            </Lazy>
           }
         />
       </Routes>

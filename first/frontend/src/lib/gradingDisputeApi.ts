@@ -1,4 +1,5 @@
 import type { GradingFeedbackPayload } from "@/lib/gradingFeedbackApi";
+import { apiFetch, parseApiJson } from "@/lib/apiClient";
 
 export type GradingDisputeStatus = "pending" | "confirmed" | "rejected";
 
@@ -62,20 +63,12 @@ export type SubmitGradingDisputePayload = GradingFeedbackPayload & {
 };
 
 export async function submitGradingDispute(payload: SubmitGradingDisputePayload): Promise<{ id: string }> {
-  const res = await fetch("/api/grading-disputes", {
+  const res = await apiFetch("/api/grading-disputes", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
   });
-  let body: { ok?: boolean; message?: string; id?: string } = {};
-  try {
-    body = (await res.json()) as typeof body;
-  } catch {
-    /* ignore */
-  }
-  if (!res.ok || !body.ok || !body.id) {
-    throw new Error(body.message || `申诉提交失败（HTTP ${res.status}）`);
-  }
+  const body = await parseApiJson<{ id?: string }>(res);
+  if (!body.id) throw new Error("申诉提交失败");
   trackDisputeId(body.id);
   return { id: body.id };
 }
@@ -87,16 +80,8 @@ export async function fetchGradingDisputes(opts?: {
   const q = new URLSearchParams();
   if (opts?.status) q.set("status", opts.status);
   if (opts?.ids?.length) q.set("ids", opts.ids.join(","));
-  const res = await fetch(`/api/grading-disputes?${q.toString()}`);
-  let body: { ok?: boolean; message?: string; items?: GradingDispute[] } = {};
-  try {
-    body = (await res.json()) as typeof body;
-  } catch {
-    /* ignore */
-  }
-  if (!res.ok || !body.ok) {
-    throw new Error(body.message || `加载申诉失败（HTTP ${res.status}）`);
-  }
+  const res = await apiFetch(`/api/grading-disputes?${q.toString()}`);
+  const body = await parseApiJson<{ items?: GradingDispute[] }>(res);
   return body.items ?? [];
 }
 
@@ -105,18 +90,9 @@ export async function reviewGradingDispute(
   action: "confirm" | "reject",
   teacherReply?: string,
 ): Promise<void> {
-  const res = await fetch(`/api/grading-disputes/${encodeURIComponent(id)}/review`, {
+  const res = await apiFetch(`/api/grading-disputes/${encodeURIComponent(id)}/review`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ action, teacher_reply: teacherReply ?? "" }),
   });
-  let body: { ok?: boolean; message?: string } = {};
-  try {
-    body = (await res.json()) as typeof body;
-  } catch {
-    /* ignore */
-  }
-  if (!res.ok || !body.ok) {
-    throw new Error(body.message || `审核失败（HTTP ${res.status}）`);
-  }
+  await parseApiJson(res);
 }

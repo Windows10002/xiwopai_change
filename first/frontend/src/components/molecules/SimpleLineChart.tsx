@@ -63,6 +63,28 @@ export function SimpleLineChart({ points, height = 140, unit = "%", className = 
           </g>
         ))}
       </svg>
+      <table className="sr-only">
+        <caption>得分趋势数据表</caption>
+        <thead>
+          <tr>
+            <th scope="col">序号</th>
+            <th scope="col">标签</th>
+            <th scope="col">得分</th>
+          </tr>
+        </thead>
+        <tbody>
+          {points.map((p, i) => (
+            <tr key={i}>
+              <td>{i + 1}</td>
+              <td>{p.label}</td>
+              <td>
+                {p.value}
+                {unit}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }

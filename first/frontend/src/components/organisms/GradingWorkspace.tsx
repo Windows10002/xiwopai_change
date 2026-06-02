@@ -21,6 +21,7 @@ import {
 import { TeacherGradingDisputeToolbarButton } from "@/components/molecules/GradingDisputePanels";
 import { useAppSession } from "@/hooks/useAppSession";
 import { submitGrade } from "@/lib/gradeApi";
+import { mapWithConcurrency } from "@/lib/batchConcurrency";
 import type { GradingFeedbackTrace } from "@/lib/gradingFeedbackApi";
 import {
   buildGroupedHistoryRows,
@@ -55,7 +56,7 @@ export type GradingWorkspaceProps = {
 const ALLOWED_IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "image/bmp", "image/gif"]);
 const ALLOWED_IMAGE_EXTENSIONS = new Set(["jpg", "jpeg", "png", "webp", "bmp", "gif"]);
 
-const CONTENT_MAX = "max-w-[min(88rem,calc(100vw-1.25rem))]";
+const CONTENT_MAX = "max-w-7xl w-full min-w-0";
 
 function deriveBatchFolderLabel(files: File[]): string | undefined {
   const paths = files
@@ -410,81 +411,89 @@ export function GradingWorkspace({
     const folderGroupKey =
       files.length > 1 ? (typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `folder-${Date.now()}`) : undefined;
 
-    for (let index = 0; index < files.length; index += 1) {
-      const file = files[index];
-      const base = (index / files.length) * 100;
-      const span = (1 / files.length) * 100;
-      let visual = base;
-      clearProgressTick();
-      progressTickRef.current = setInterval(() => {
-        visual = Math.min(visual + span / 12, base + span * 0.9);
-        setUploadStatus({
-          phase: "uploading",
-          progress: Math.round(visual),
-          message: files.length > 1 ? `正在批改整个文件夹（${index + 1}/${files.length}）` : "正在批改当前图片",
-        });
-      }, 240);
-
-      try {
-        const { detail, imageUrl } = await submitGrade(file, subject, {
-          gradeLevel: teacherGradeLevel.trim() || undefined,
-          teacherNote: teacherNote.trim() || undefined,
-          essayPromptText: subject === "english" ? essayPromptText.trim() || undefined : undefined,
-          essayPromptFile: subject === "english" ? essayPromptFileRef.current ?? undefined : undefined,
-        });
-        nextResults[index] = detail;
-        setBatchResults([...nextResults]);
-        setResult(detail);
-        if (imageUrl) {
-          serverPreviewByIndexRef.current[index] = imageUrl;
-          setServerImageUrlByIndex((prev) => ({ ...prev, [index]: imageUrl }));
-        }
-        try {
-          const thumb = await fileToJpegThumbDataUrl(file);
-          const rec = saveGradingHistoryEntry({
-            subject,
-            fileName: file.name,
-            detail,
-            ...(canManage && studentName.trim() ? { studentName: studentName.trim() } : {}),
-            ...(teacherGradeLevel.trim() ? { gradeLevel: teacherGradeLevel.trim() } : {}),
-            ...(thumb ? { thumbDataUrl: thumb } : {}),
-            ...(folderGroupKey
-              ? {
-                  groupKey: folderGroupKey,
-                  groupIndex: index + 1,
-                  groupSize: files.length,
-                  ...(batchFolderLabel ? { groupName: batchFolderLabel } : {}),
-                }
-              : {}),
-          });
-          historyIdByIndexRef.current[index] = rec.id;
-          setHistoryEntryIdByIndex((prev) => ({ ...prev, [index]: rec.id }));
-          refreshHistory();
-          try {
-            const blob = await fileToJpegBlobForStorage(file);
-            await putHistoryImageBlob(rec.id, blob);
-          } catch {
-            /* ignore IDB / 压缩失败 */
-          }
-        } catch {
-          /* ignore */
-        }
-      } catch (e) {
-        const msg = e instanceof Error ? e.message : "批改失败，请稍后重试。";
-        nextErrors[index] = msg;
-        setBatchErrors([...nextErrors]);
-      } finally {
+    let completed = 0;
+    await mapWithConcurrency(
+      files,
+      2,
+      async (file, index) => {
+        const base = (index / files.length) * 100;
+        const span = (1 / files.length) * 100;
+        let visual = base;
         clearProgressTick();
-        const done = index + 1;
-        const pct = Math.round((done / files.length) * 100);
-        setGradingProgress({ done, total: files.length });
-        setUploadStatus({
-          phase: "uploading",
-          progress: pct,
-          message: files.length > 1 ? `正在批改整个文件夹（${done}/${files.length}）` : "正在批改当前图片",
-        });
-      }
-    }
+        progressTickRef.current = setInterval(() => {
+          visual = Math.min(visual + span / 12, base + span * 0.9);
+          setUploadStatus({
+            phase: "uploading",
+            progress: Math.round(visual),
+            message: files.length > 1 ? `正在批改整个文件夹（${completed + 1}/${files.length}）` : "正在批改当前图片",
+          });
+        }, 240);
+
+        try {
+          const { detail, imageUrl } = await submitGrade(file, subject, {
+            gradeLevel: teacherGradeLevel.trim() || undefined,
+            teacherNote: teacherNote.trim() || undefined,
+            essayPromptText: subject === "english" ? essayPromptText.trim() || undefined : undefined,
+            essayPromptFile: subject === "english" ? essayPromptFileRef.current ?? undefined : undefined,
+          });
+          nextResults[index] = detail;
+          setBatchResults([...nextResults]);
+          setResult(detail);
+          if (imageUrl) {
+            serverPreviewByIndexRef.current[index] = imageUrl;
+            setServerImageUrlByIndex((prev) => ({ ...prev, [index]: imageUrl }));
+          }
+          try {
+            const thumb = await fileToJpegThumbDataUrl(file);
+            const rec = saveGradingHistoryEntry({
+              subject,
+              fileName: file.name,
+              detail,
+              ...(canManage || session?.role === "parent"
+                ? studentName.trim()
+                  ? { studentName: studentName.trim() }
+                  : {}
+                : {}),
+              ...(teacherGradeLevel.trim() ? { gradeLevel: teacherGradeLevel.trim() } : {}),
+              ...(thumb ? { thumbDataUrl: thumb } : {}),
+              ...(folderGroupKey
+                ? {
+                    groupKey: folderGroupKey,
+                    groupIndex: index + 1,
+                    groupSize: files.length,
+                    ...(batchFolderLabel ? { groupName: batchFolderLabel } : {}),
+                  }
+                : {}),
+            });
+            historyIdByIndexRef.current[index] = rec.id;
+            setHistoryEntryIdByIndex((prev) => ({ ...prev, [index]: rec.id }));
+            refreshHistory();
+            try {
+              const blob = await fileToJpegBlobForStorage(file);
+              await putHistoryImageBlob(rec.id, blob);
+            } catch {
+              /* ignore */
+            }
+          } catch {
+            /* ignore */
+          }
+        } catch (e) {
+          const msg = e instanceof Error ? e.message : "批改失败，请稍后重试。";
+          nextErrors[index] = msg;
+          setBatchErrors([...nextErrors]);
+        } finally {
+          clearProgressTick();
+          completed += 1;
+          const pct = Math.round((completed / files.length) * 100);
+          setGradingProgress({ done: completed, total: files.length });
+          setUploadStatus({
+            phase: "uploading",
+            progress: pct,
+            message: files.length > 1 ? `正在批改整个文件夹（${completed}/${files.length}）` : "正在批改当前图片",
+          });
+        }
+      },
+    );
 
     const firstResultIndex = nextResults.findIndex(Boolean);
     if (firstResultIndex >= 0) {
@@ -654,7 +663,8 @@ export function GradingWorkspace({
     navigate,
   ]);
 
-  const uploadLocked = uploadStatus.phase === "uploading" || uploadStatus.phase === "success" || isGrading;
+  const uploadLocked =
+    isGrading || uploadStatus.phase === "uploading" || (step < 3 && uploadStatus.phase === "success");
 
   const errorRegions = result?.errorRegions ?? [];
 
@@ -780,12 +790,12 @@ export function GradingWorkspace({
   const SubjectToolbarIcon = SUBJECT_TOOLBAR_ICON[subject];
 
   return (
-    <div className="page-bg-hero-stunning relative flex min-h-screen flex-col">
+    <div className="page-bg-hero-stunning relative flex min-h-dvh min-h-screen flex-1 flex-col">
       {isStudentUi ? <PageCampusDeco /> : null}
-      <div className="relative z-10 flex min-h-0 flex-1 flex-col">
-        <main className={`mx-auto w-full flex-1 px-4 py-6 md:px-6 md:py-8 ${CONTENT_MAX}`}>
+      <div className="relative z-10 flex min-h-0 min-w-0 flex-1 flex-col">
+        <main className={`mx-auto w-full min-w-0 max-w-full flex-1 px-4 pt-6 pb-3 md:px-6 md:pt-8 md:pb-4 ${CONTENT_MAX}`}>
           <div
-            className={`glass-panel mb-6 rounded-2xl bg-gradient-to-r from-white/55 via-primary-tint/25 to-white/50 px-3 py-3 md:flex md:items-center md:justify-between md:gap-4 md:px-4 md:py-2.5 ${isStudentUi ? "animate-bounce-in" : ""}`}
+            className={`glass-panel mb-6 min-w-0 max-w-full rounded-2xl bg-gradient-to-r from-white/55 via-primary-tint/25 to-white/50 px-3 py-3 md:flex md:items-center md:justify-between md:gap-4 md:px-4 md:py-2.5 ${isStudentUi ? "animate-bounce-in" : ""}`}
           >
             <div className="flex min-w-0 flex-1 flex-col gap-2.5 sm:flex-row sm:items-center sm:gap-3 md:gap-4">
               <div className="flex shrink-0 items-center gap-2 md:gap-2.5">
@@ -853,7 +863,7 @@ export function GradingWorkspace({
             </p>
           ) : null}
 
-          <div key={step} className={isStudentUi ? "animate-step-flow" : undefined}>
+          <div key={step} className={isStudentUi ? "animate-step-flow min-w-0 max-w-full" : "min-w-0 max-w-full"}>
             <StepIndicator
               current={step}
               trailingSlot={
@@ -868,46 +878,66 @@ export function GradingWorkspace({
                 </button>
               }
             />
-            <div className="mt-6 grid grid-cols-1 gap-6 md:mt-8 md:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] md:gap-8 md:items-stretch">
+            <div className="mt-6 grid w-full min-w-0 max-w-full grid-cols-1 gap-6 md:mt-8 md:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] md:items-stretch md:gap-6 lg:gap-8">
               <div
-                className={`glass-panel flex min-h-0 min-w-0 flex-1 flex-col gap-4 rounded-[1.35rem] p-4 md:h-full md:min-h-0 md:p-5 ${isStudentUi ? "animate-bounce-in stagger-1" : ""}`}
+                className={`glass-panel flex h-full min-h-0 min-w-0 max-w-full flex-col gap-3 overflow-hidden rounded-[1.35rem] p-4 md:gap-4 md:p-5 ${isStudentUi ? "animate-bounce-in stagger-1" : ""}`}
               >
                 <UploadDropzone
                   title={uploadTitle}
                   hint={combinedHint}
                   onFiles={handleFiles}
-                  status={uploadStatus}
+                  status={step >= 3 && !isGrading ? { phase: "idle" } : uploadStatus}
                   locked={uploadLocked}
+                  compact={step >= 3 && !isGrading}
                 />
-                <div className="mx-auto w-full max-w-xl pt-1">
-                  <PrimaryButton
-                    className="w-full min-h-[3.25rem] rounded-2xl px-8 py-3.5 text-[0.95rem] font-extrabold shadow-[0_10px_28px_rgba(82,196,26,0.22)] ring-1 ring-white/70 md:min-h-14"
-                    disabled={startDisabled}
-                    onClick={handleStartGrading}
+                {step < 3 || isGrading ? (
+                  <>
+                    <div className="mx-auto w-full max-w-xl pt-1">
+                      <PrimaryButton
+                        className="w-full min-h-[3.25rem] rounded-2xl px-8 py-3.5 text-[0.95rem] font-extrabold shadow-[0_10px_28px_rgba(82,196,26,0.22)] ring-1 ring-white/70 md:min-h-14"
+                        disabled={startDisabled}
+                        onClick={handleStartGrading}
+                      >
+                        {isGrading && gradingProgress.total > 1
+                          ? `正在批改 ${gradingProgress.done}/${gradingProgress.total}`
+                          : startButtonText}
+                      </PrimaryButton>
+                    </div>
+                    {showWorkspaceProgress ? (
+                      <div className="mx-auto w-full max-w-xl rounded-full bg-white/80 p-1 shadow-inner">
+                        <div
+                          className="h-2 rounded-full bg-gradient-to-r from-brand via-primary to-accent-mint transition-[width] duration-300 ease-out"
+                          style={{ width: `${Math.max(4, Math.min(100, progressPercent))}%` }}
+                        />
+                      </div>
+                    ) : null}
+                  </>
+                ) : null}
+                <div
+                  className={
+                    step >= 3 && previewUrl
+                      ? "flex min-h-0 flex-1 flex-col gap-2 overflow-hidden"
+                      : "flex min-h-0 flex-col"
+                  }
+                >
+                  {step >= 3 && previewUrl ? (
+                    <p className="shrink-0 text-caption font-bold text-ink-muted">批改作业原图</p>
+                  ) : null}
+                  <div
+                    className={
+                      step >= 3 && previewUrl ? "flex min-h-0 flex-1 flex-col overflow-hidden" : "flex min-h-0 flex-col"
+                    }
                   >
-                    {isGrading && gradingProgress.total > 1
-                      ? `正在批改 ${gradingProgress.done}/${gradingProgress.total}`
-                      : startButtonText}
-                  </PrimaryButton>
-                </div>
-                {showWorkspaceProgress ? (
-                  <div className="mx-auto w-full max-w-xl rounded-full bg-white/80 p-1 shadow-inner">
-                    <div
-                      className="h-2 rounded-full bg-gradient-to-r from-brand via-primary to-accent-mint transition-[width] duration-300 ease-out"
-                      style={{ width: `${Math.max(4, Math.min(100, progressPercent))}%` }}
+                    <HomeworkPreview
+                      fillColumn={step >= 3 && Boolean(previewUrl)}
+                      imageUrl={previewUrl}
+                      errorRegions={errorRegions}
+                      idleHint={result && !previewUrl ? "当前为历史回顾：可重新上传原卷对照。" : undefined}
+                      paperMarks={paperMarks}
+                      paperMarkGrid={null}
+                      showPaperMarksOnMain={false}
                     />
                   </div>
-                ) : null}
-              <div className="flex min-h-0 min-w-0 flex-1 flex-col md:min-h-0">
-                <HomeworkPreview
-                  fillColumn
-                  imageUrl={previewUrl}
-                  errorRegions={errorRegions}
-                  idleHint={result && !previewUrl ? "当前为历史回顾：可重新上传原卷对照。" : undefined}
-                  paperMarks={paperMarks}
-                  paperMarkGrid={null}
-                  showPaperMarksOnMain={false}
-                />
                 </div>
                 {selectedFiles.length > 1 ? (
                   !isGrading && (batchSuccessCount > 0 || batchFailCount > 0) ? (
@@ -984,7 +1014,7 @@ export function GradingWorkspace({
                   )
                 ) : null}
               </div>
-              <div className="flex min-h-0 min-w-0 flex-col md:h-full md:min-h-[min(100%,28rem)]">
+              <div className="flex h-full min-h-0 min-w-0 max-w-full flex-col">
                 <ScoreResultCard
                   subject={subject}
                   result={result}
