@@ -41,7 +41,10 @@ type StepIndicatorProps = {
  */
 export function StepIndicator({ steps = DEFAULT_STEPS, current, trailingSlot }: StepIndicatorProps) {
   return (
-    <nav className="step-indicator-shell" aria-label="批改流程步骤">
+    <nav
+      className="step-indicator-shell glass-panel w-full max-w-full gap-3 rounded-[1.35rem] px-3 py-3 shadow-card ring-1 sm:px-4 sm:py-4"
+      aria-label="批改流程步骤"
+    >
       <ol className="step-indicator-track w-full min-w-0 max-w-none list-none px-1 sm:px-2">
         {steps.map((step, index) => {
           const n = index + 1;
@@ -54,23 +57,25 @@ export function StepIndicator({ steps = DEFAULT_STEPS, current, trailingSlot }: 
               className="step-indicator-li"
               style={index === 1 ? MID_STEP_STYLE : undefined}
             >
-              <span
-                className={[
-                  "relative z-[1] flex h-9 w-9 shrink-0 items-center justify-center rounded-full border text-caption font-bold transition-all duration-button ease-smooth",
-                  isActive ? "animate-step-active-pulse border text-white shadow-none" : "",
-                  isDone ? "border text-white shadow-none" : "",
-                  !isActive && !isDone ? "border-gray-200 bg-gray-100 text-gray-500" : "",
-                ].join(" ")}
-                style={
-                  isActive || isDone
-                    ? { backgroundColor: STEP_ACTIVE_GREEN, borderColor: STEP_ACTIVE_GREEN }
-                    : undefined
-                }
-              >
-                {isDone ? <Check className="h-4 w-4" {...CUTE_ICON} aria-hidden /> : n}
-              </span>
+              <div className="step-indicator-dot-slot">
+                <span
+                  className={[
+                    "step-indicator-dot flex h-9 w-9 items-center justify-center rounded-full border text-caption font-bold transition-all duration-button ease-smooth",
+                    isActive ? "animate-step-active-pulse ring-2 ring-[#51c527]/35 border text-white shadow-none" : "",
+                    isDone ? "border text-white shadow-none" : "",
+                    !isActive && !isDone ? "border-gray-200 bg-gray-100 text-gray-500" : "",
+                  ].join(" ")}
+                  style={
+                    isActive || isDone
+                      ? { backgroundColor: STEP_ACTIVE_GREEN, borderColor: STEP_ACTIVE_GREEN }
+                      : undefined
+                  }
+                >
+                  {isDone ? <Check className="h-4 w-4" {...CUTE_ICON} aria-hidden /> : n}
+                </span>
+              </div>
 
-              <span className="step-indicator-label mt-1 flex max-w-[6rem] flex-col items-center">
+              <span className="step-indicator-label -mt-1 flex max-w-[6rem] flex-col items-center">
                 <span
                   className={[
                     "step-indicator-label-inner w-full text-center text-[0.8125rem] leading-snug sm:text-small md:text-body",

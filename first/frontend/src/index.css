@@ -217,12 +217,10 @@ body {
 @keyframes step-active-pop {
   0%,
   100% {
-    transform: scale(1);
-    box-shadow: 0 0 0 0 rgb(81 197 39 / 0.45);
+    opacity: 1;
   }
   50% {
-    transform: scale(1.12);
-    box-shadow: 0 0 0 8px rgb(81 197 39 / 0);
+    opacity: 0.88;
   }
 }
 
@@ -668,11 +666,12 @@ body {
    * 批改步骤条：横向约 15% / 55%（第二步，left 见 StepIndicator 内联）/ 90%；连线 ::before 自 15% 至第三步圆心 90%。
    */
   .step-indicator-shell {
-    @apply glass-panel w-full max-w-full gap-3 overflow-hidden rounded-card px-3 py-3 transition-[box-shadow] duration-button ease-smooth;
+    position: relative;
+    z-index: 30;
+    overflow: visible;
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto;
-    /* 步骤轨 + 右侧按钮视为一行，在白框内垂直居中 */
-    align-items: center;
+    align-items: start;
     column-gap: 0.75rem;
     row-gap: 0;
   }
@@ -685,11 +684,10 @@ body {
     width: 100%;
     min-width: 0;
     max-width: none;
-    /* 绝对定位子项不参与撑高：min-height 仅略大于圆+双行文案，避免底部大块留白 */
-    min-height: 5.1rem;
+    min-height: 6.25rem;
     margin: 0;
-    padding: 0.35rem 0 0.35rem;
-    overflow: hidden;
+    padding: 0.75rem 0 0.35rem;
+    overflow: visible;
   }
 
   .step-indicator-track::before {
@@ -697,8 +695,8 @@ body {
     position: absolute;
     left: 15%;
     width: calc(90% - 15%);
-    /* 与圆心对齐：track 上内边距 + h-9 圆半径 */
-    top: calc(0.35rem + 1.125rem);
+    /* 圆点槽位垂直中心：li top + dot-slot 半高 */
+    top: calc(0.75rem + 1.625rem);
     height: 2px;
     z-index: 0;
     border-radius: 1px;
@@ -707,14 +705,29 @@ body {
 
   .step-indicator-li {
     position: absolute;
-    top: 0;
-    z-index: 1;
+    top: 0.75rem;
+    z-index: 10;
     display: flex;
     width: max-content;
     max-width: min(7.5rem, 28vw);
     flex-direction: column;
     align-items: center;
     transform: translateX(-50%);
+  }
+
+  /* 预留上下空间，避免 active 态 ring / 动画被父级裁切 */
+  .step-indicator-dot-slot {
+    display: flex;
+    height: 3.25rem;
+    width: 3.25rem;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .step-indicator-dot {
+    position: relative;
+    z-index: 20;
   }
 
   .step-indicator-track > .step-indicator-li:nth-of-type(1) {

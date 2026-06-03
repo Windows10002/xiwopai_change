@@ -61,7 +61,7 @@ export function GlassOpacityControl({ value, onChange, compact = false, classNam
     return (
       <div
         className={[
-          "flex min-w-0 max-w-[14rem] flex-col gap-1 rounded-xl border border-white/45 bg-white/40 px-2.5 py-2 backdrop-blur-sm sm:max-w-[16rem]",
+          "glass-panel-inner flex min-w-0 max-w-[14rem] flex-col gap-1 rounded-xl px-2.5 py-2 sm:max-w-[16rem]",
           className,
         ].join(" ")}
         title="调整界面毛玻璃浓淡"

@@ -973,7 +973,7 @@ export function GradingWorkspace({
             <p className="mb-4 rounded-xl bg-ink px-4 py-2 text-center text-caption font-semibold text-white">{workspaceToast}</p>
           ) : null}
 
-          <div key={step} className={isStudentUi ? "animate-step-flow min-w-0 max-w-full" : "min-w-0 max-w-full"}>
+          <div key={step} className={`relative z-30 ${isStudentUi ? "animate-step-flow min-w-0 max-w-full" : "min-w-0 max-w-full"}`}>
             <StepIndicator
               current={step}
               trailingSlot={
