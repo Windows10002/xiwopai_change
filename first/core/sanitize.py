@@ -19,3 +19,11 @@ def sanitize_teacher_note(s: str) -> str:
 
 def sanitize_essay_prompt(s: str) -> str:
     return clip_text(s, 2000)
+
+
+def sanitize_answer_key(s: str) -> str:
+    return clip_text(s, 8000)
+
+
+def sanitize_scoring_rubric(s: str) -> str:
+    return clip_text(s, 4000)

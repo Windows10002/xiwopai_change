@@ -98,8 +98,12 @@ export function buildScoringStrategyModel(subject: "math" | "english", detail: G
 }
 
 /** 纯文本版（导出、无障碍朗读或与旧逻辑兼容） */
-export function buildScoringStrategyDetail(subject: "math" | "english", detail: GradingResultDetail): string {
-  const m = buildScoringStrategyModel(subject, detail);
+export function buildScoringStrategyDetail(
+  subject: "math" | "english" | "chinese",
+  detail: GradingResultDetail,
+): string {
+  const pipeline = subject === "english" ? "english" : "math";
+  const m = buildScoringStrategyModel(pipeline, detail);
   const roman = ["一", "二", "三", "四"] as const;
   if (m.subject === "math") {
     const lines = [`【${m.headline}】`, ""];

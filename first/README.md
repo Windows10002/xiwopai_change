@@ -35,6 +35,8 @@ npm run dev
 
 浏览器打开 http://localhost:5173（Vite 代理到 50003）。
 
+**本地开发速查（多标签登录、常用地址）：** 见 [docs/DEV.md](docs/DEV.md)。
+
 **演示（单端口）：**
 
 ```powershell

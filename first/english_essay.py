@@ -229,11 +229,17 @@ def _teacher_context_suffix_english(
     grade_level: str,
     teacher_note: str,
     essay_prompt: str = "",
+    answer_key: str = "",
+    scoring_rubric: str = "",
+    *,
+    has_answer_key_image: bool = False,
 ) -> str:
     g = (grade_level or "").strip()
     n = (teacher_note or "").strip()
     p = (essay_prompt or "").strip()
-    if not g and not n and not p:
+    ak = (answer_key or "").strip()
+    rub = (scoring_rubric or "").strip()
+    if not g and not n and not p and not ak and not rub and not has_answer_key_image:
         return ""
     parts = ["\n\n【任课教师补充说明（请纳入批改语境；若与作文内容明显无关仍以作文与图片为准）】"]
     if p:
@@ -241,6 +247,19 @@ def _teacher_context_suffix_english(
             f"【作文题目（文字，老师填写）】\n{p}\n"
             "请按本题要求判断学生是否扣题、要点是否齐全，并在内容分与总评中体现；明显偏题须明确指出。"
         )
+    if has_answer_key_image:
+        parts.append(
+            "【参考答案 / 范文要点】已在前一张附图中给出，请对照要点判断内容是否覆盖、表述是否合理，"
+            "并在内容分与总评中体现。"
+        )
+    elif ak:
+        parts.append(
+            "【参考答案 / 范文要点（老师提供，选填）】\n"
+            f"{ak}\n"
+            "请对照要点判断内容是否覆盖、表述是否合理，并在内容分与总评中体现；勿将参考答案照抄进评语。"
+        )
+    if rub:
+        parts.append(f"【评分细则】\n{rub}\n请在各维度评分时尽量按细则把握。")
     if g:
         parts.append(
             f"学生所在年级（老师填写）：{g}。请按该学段常见词汇与句法难度调整语言维度扣分尺度与评语用语，避免用明显超纲的学术写作标准苛求学生。"
@@ -277,17 +296,33 @@ def analyze_image(
     teacher_note="",
     essay_prompt="",
     essay_prompt_image="",
+    answer_key="",
+    answer_key_image="",
+    scoring_rubric="",
 ):
     """调用大模型并返回结构化数据 - 修复版"""
     try:
         image_url = _image_to_data_url(image_path)
-        extra = _teacher_context_suffix_english(grade_level, teacher_note, essay_prompt)
+        extra = _teacher_context_suffix_english(
+            grade_level,
+            teacher_note,
+            essay_prompt,
+            answer_key,
+            scoring_rubric,
+            has_answer_key_image=bool((answer_key_image or "").strip() and os.path.isfile(answer_key_image)),
+        )
         content = []
         prompt_img = (essay_prompt_image or "").strip()
         if prompt_img and os.path.isfile(prompt_img):
             content.append({"image": _image_to_data_url(prompt_img)})
             content.append({
                 "text": "【上图】为本次考试的作文题目或写作要求。请先读懂题意与要点，再批改下一张图中的学生手写作文。"
+            })
+        ak_img = (answer_key_image or "").strip()
+        if ak_img and os.path.isfile(ak_img):
+            content.append({"image": _image_to_data_url(ak_img)})
+            content.append({
+                "text": "【上图】为教师提供的参考答案或范文要点，请先阅读再批改下一张学生作文。"
             })
         content.append({"image": image_url})
         content.append({"text": PROMPT_SYSTEM + extra})
@@ -469,6 +504,8 @@ def process_image(
     teacher_note: str = "",
     essay_prompt: str = "",
     essay_prompt_image: str = "",
+    answer_key: str = "",
+    scoring_rubric: str = "",
 ) -> dict:
     """
     Flask / Web 统一入口：英语作文多维评分与诊断。
@@ -492,6 +529,8 @@ def process_image(
         teacher_note=teacher_note,
         essay_prompt=essay_prompt,
         essay_prompt_image=essay_prompt_image,
+        answer_key=answer_key,
+        scoring_rubric=scoring_rubric,
     )
     if not data:
         return {

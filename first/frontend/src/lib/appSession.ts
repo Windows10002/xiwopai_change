@@ -1,8 +1,10 @@
 /**
  * 演示环境本地会话：家长端 / 学生端 / 教师端 / 教务系统端
  */
+import { getAuthSlot, scopedStorageKey } from "@/lib/authSlot";
 import { clearAuthToken, fetchAuthMe, loadAuthToken } from "@/lib/apiClient";
 import { findDemoAccount } from "@/lib/demoAccounts";
+import { loadStudentProfileName, saveStudentProfileName } from "@/lib/studentProfileName";
 
 export type AppUserRole = "parent" | "student" | "teacher" | "admin";
 
@@ -21,6 +23,10 @@ export type AppSession = {
 };
 
 const STORAGE_KEY = "seewo_pi_app_session_v2";
+
+function sessionStorageKey(): string {
+  return scopedStorageKey(STORAGE_KEY);
+}
 
 export const APP_SESSION_CHANGED = "seewo-pi-session-changed";
 
@@ -101,8 +107,10 @@ function normalizeSession(o: Record<string, unknown>): AppSession | null {
 }
 
 export function loadSession(): AppSession | null {
+  const key = sessionStorageKey();
   for (const store of [localStorage, sessionStorage] as const) {
-    const raw = store.getItem(STORAGE_KEY);
+    let raw = store.getItem(key);
+    if (!raw && getAuthSlot() === "main") raw = store.getItem(STORAGE_KEY);
     if (!raw) continue;
     try {
       const o = JSON.parse(raw) as Record<string, unknown>;
@@ -115,16 +123,26 @@ export function loadSession(): AppSession | null {
 }
 
 export function saveSession(session: AppSession, remember: boolean): void {
+  const key = sessionStorageKey();
   const primary = remember ? localStorage : sessionStorage;
   const secondary = remember ? sessionStorage : localStorage;
-  secondary.removeItem(STORAGE_KEY);
-  primary.setItem(STORAGE_KEY, JSON.stringify(session));
+  secondary.removeItem(key);
+  primary.setItem(key, JSON.stringify(session));
+  if (getAuthSlot() === "main") {
+    secondary.removeItem(STORAGE_KEY);
+    primary.setItem(STORAGE_KEY, JSON.stringify(session));
+  }
   emitSessionChanged();
 }
 
 export function clearSession(): void {
-  localStorage.removeItem(STORAGE_KEY);
-  sessionStorage.removeItem(STORAGE_KEY);
+  const key = sessionStorageKey();
+  localStorage.removeItem(key);
+  sessionStorage.removeItem(key);
+  if (getAuthSlot() === "main") {
+    localStorage.removeItem(STORAGE_KEY);
+    sessionStorage.removeItem(STORAGE_KEY);
+  }
   clearAuthToken();
   emitSessionChanged();
 }
@@ -140,8 +158,13 @@ export function canAccessGrading(session: AppSession | null): boolean {
 }
 
 function sessionPersistence(): "local" | "session" | null {
-  if (localStorage.getItem(STORAGE_KEY)) return "local";
-  if (sessionStorage.getItem(STORAGE_KEY)) return "session";
+  const key = sessionStorageKey();
+  if (localStorage.getItem(key) || (getAuthSlot() === "main" && localStorage.getItem(STORAGE_KEY))) {
+    return "local";
+  }
+  if (sessionStorage.getItem(key) || (getAuthSlot() === "main" && sessionStorage.getItem(STORAGE_KEY))) {
+    return "session";
+  }
   return null;
 }
 
@@ -238,6 +261,10 @@ async function syncSessionFromAuthMeImpl(): Promise<AppSession | null> {
 
     if (!unchanged) {
       saveSession(merged, sessionPersistence() !== "session");
+    }
+
+    if (merged.role === "student" && merged.displayName?.trim() && !loadStudentProfileName()) {
+      saveStudentProfileName(merged.displayName.trim(), sessionPersistence() !== "session");
     }
 
     return merged;

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { AppLink } from "@/components/atoms/AppLink";
 import {
   ChevronRight,
   ClipboardList,
@@ -102,7 +102,7 @@ function ToolCard({
 }) {
   const tone = TOOL_ACCENT[accent];
   return (
-    <Link
+    <AppLink
       to={to}
       className={`group flex items-center gap-3 rounded-xl border border-black/[0.06] border-l-[4px] p-4 shadow-card transition-all duration-hover hover:-translate-y-0.5 ${tone.shell} ${tone.shadow}`}
     >
@@ -127,7 +127,7 @@ function ToolCard({
         {...CUTE_ICON}
         aria-hidden
       />
-    </Link>
+    </AppLink>
   );
 }
 
@@ -142,7 +142,7 @@ export function HomePageTeacher() {
   useEffect(() => {
     if (!loadAuthToken()) return;
     void fetchInboxCounts()
-      .then((c) => setInboxPending(c.unpublished_graded + c.corrections_pending))
+      .then((c) => setInboxPending((c.pending_review || c.unpublished_graded) + c.corrections_pending))
       .catch(() => setInboxPending(0));
     void fetchGradingDisputes({ status: "pending" })
       .then((items) => setDisputePending(items.filter((x) => x.submitter_role === "student").length))
@@ -181,7 +181,7 @@ export function HomePageTeacher() {
               <p className="mx-auto mt-1 max-w-sm text-center text-caption text-ink-muted">
                 拍正、少反光，系统自动识别手写并给出分项得分
               </p>
-              <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-3">
                 <SubjectCard
                   emphasis
                   title="数学作业"
@@ -192,11 +192,19 @@ export function HomePageTeacher() {
                 />
                 <SubjectCard
                   emphasis
-                  title="英语作文"
+                  title="语文作业"
+                  description="字词 · 阅读 · 书写规范"
+                  to="/chinese"
+                  theme="chinese"
+                  badge="文科"
+                />
+                <SubjectCard
+                  emphasis
+                  title="英语作业"
                   description="内容 · 语言 · 结构"
                   to="/english"
                   theme="english"
-                  badge="作文"
+                  badge="外语"
                 />
               </div>
             </section>

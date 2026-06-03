@@ -19,6 +19,7 @@ def api_health():
         "ok": True,
         "spa_built": spa_built(),
         "workspace_loaded": current_app.config.get("WORKSPACE_STORE") is not None,
+        "assignment_multipart": True,
     }
     if not user or not has_permission(str(user.get("role", "")), "health.detail"):
         return jsonify(basic)

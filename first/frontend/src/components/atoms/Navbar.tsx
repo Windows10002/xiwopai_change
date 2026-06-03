@@ -4,6 +4,7 @@ import { LogOut, Settings, UserRound } from "lucide-react";
 import { fetchGradingDisputes } from "@/lib/gradingDisputeApi";
 import { IpBrandFace } from "@/components/atoms/IpMascot";
 import { CUTE_ICON } from "@/components/atoms/cuteIcon";
+import { authSlotLabel, getAuthSlot, loginPath, withAuthSlot } from "@/lib/authSlot";
 import { clearSession, isAppLoggedIn, sessionDisplayLabel } from "@/lib/appSession";
 import { useAppSession } from "@/hooks/useAppSession";
 import { countWrongBookItems } from "@/lib/wrongQuestionBook";
@@ -33,7 +34,7 @@ type NavbarProps = {
 function NavItem({ to, children }: { to: string; children: ReactNode }) {
   return (
     <NavLink
-      to={to}
+      to={withAuthSlot(to)}
       className={({ isActive }) =>
         [
           "group relative inline-flex min-h-11 shrink-0 flex-col items-center justify-center rounded-full px-5 py-2.5 text-small font-semibold outline-none transition-colors duration-button ease-smooth",
@@ -95,7 +96,7 @@ export function Navbar({
       >
         <div className="flex min-w-0 items-center gap-2">
           <Link
-            to="/"
+            to={withAuthSlot("/")}
             className="inline-flex min-h-10 items-center gap-2 rounded-xl px-1 text-small font-bold tracking-tight text-ink transition-colors duration-button ease-smooth hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35 focus-visible:ring-offset-2"
           >
             <IpBrandFace size="md" className="-translate-y-px" decorative />
@@ -121,7 +122,7 @@ export function Navbar({
           {showMyWork ? <NavItem to="/my-work">我的作业</NavItem> : null}
           {showWrongBook ? (
             <NavLink
-              to="/wrong-book"
+              to={withAuthSlot("/wrong-book")}
               className={({ isActive }) =>
                 [
                   "group relative inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-full px-4 py-2.5 text-small font-semibold outline-none transition-colors duration-button ease-smooth",
@@ -144,7 +145,7 @@ export function Navbar({
           {showHistoryDropdown ? <HistoryDropdown variant="nav" subjectScope="all" requireLogin={!loggedIn} /> : null}
           {loggedIn ? (
             <NavLink
-              to="/settings"
+              to={withAuthSlot("/settings")}
               title={disputePending > 0 ? `设置（${disputePending} 条待处理申诉）` : "设置"}
               aria-label="设置"
               className={({ isActive }) =>
@@ -165,7 +166,7 @@ export function Navbar({
             </NavLink>
           ) : (
             <Link
-              to={`/login?redirect=${encodeURIComponent("/settings")}`}
+              to={loginPath("/settings")}
               title="设置（需登录）"
               aria-label="设置（需登录）"
               className="relative inline-flex min-h-10 min-w-10 items-center justify-center rounded-full border border-black/[0.06] bg-white text-ink-muted shadow-sm transition duration-button ease-smooth hover:border-primary/25 hover:text-[#006D41] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-2 focus-visible:ring-offset-white md:min-h-11 md:min-w-11"
@@ -175,6 +176,14 @@ export function Navbar({
           )}
           {loggedIn ? (
             <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
+              {import.meta.env.DEV && getAuthSlot() !== "main" ? (
+                <span
+                  className="hidden rounded-full border border-sky-300 bg-sky-50 px-2 py-1 text-[0.6rem] font-bold text-sky-900 sm:inline"
+                  title="开发：本标签独立登录槽"
+                >
+                  {authSlotLabel()}
+                </span>
+              ) : null}
               <span
                 className="inline-flex max-w-[7.5rem] items-center gap-1.5 rounded-full border border-primary/20 bg-primary-tint/90 px-2.5 py-1.5 text-[0.65rem] font-bold text-[#006D41] shadow-sm sm:max-w-none sm:px-3 sm:text-caption"
                 title={session ? `已登录：${sessionDisplayLabel(session)}` : undefined}
@@ -197,7 +206,10 @@ export function Navbar({
               登录
             </button>
           ) : (
-            <Link to="/login" className="btn-accent-mint-solid min-h-10 shrink-0 px-5 text-small md:min-h-11 md:px-6">
+            <Link
+              to={withAuthSlot("/login")}
+              className="btn-accent-mint-solid min-h-10 shrink-0 px-5 text-small md:min-h-11 md:px-6"
+            >
               登录
             </Link>
           )}

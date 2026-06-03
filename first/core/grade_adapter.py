@@ -11,7 +11,15 @@ except ImportError:
     call_ai_math = None
 
 
-def math_process(image_path: str, *, grade_level: str = "", teacher_note: str = "") -> dict:
+def math_process(
+    image_path: str,
+    *,
+    grade_level: str = "",
+    teacher_note: str = "",
+    answer_key: str = "",
+    answer_key_image: str = "",
+    scoring_rubric: str = "",
+) -> dict:
     if not image_path:
         return {
             "error": True,
@@ -32,7 +40,14 @@ def math_process(image_path: str, *, grade_level: str = "", teacher_note: str = 
         }
 
     try:
-        data = call_ai_math(image_path, grade_level=grade_level, teacher_note=teacher_note)
+        data = call_ai_math(
+            image_path,
+            grade_level=grade_level,
+            teacher_note=teacher_note,
+            answer_key=answer_key,
+            answer_key_image=answer_key_image,
+            scoring_rubric=scoring_rubric,
+        )
         if data and data.get("questions"):
             try:
                 from math_correct import normalize_math_result

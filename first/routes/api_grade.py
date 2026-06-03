@@ -140,7 +140,7 @@ def api_grade():
         student_name = resolve_student_profile_name(user)
 
     try:
-        if subject == "math":
+        if subject in {"math", "chinese"}:
             result_data = math_process(file_path, grade_level=grade_level, teacher_note=teacher_note)
         else:
             result_data = english_process(

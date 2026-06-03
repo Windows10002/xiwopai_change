@@ -1,4 +1,4 @@
-import { Calculator, ChevronRight, Languages } from "lucide-react";
+import { BookOpen, Calculator, ChevronRight, Languages } from "lucide-react";
 import { Link } from "react-router-dom";
 import { CUTE_ICON } from "@/components/atoms/cuteIcon";
 
@@ -7,7 +7,7 @@ export type SubjectCardProps = {
   description: string;
   to: string;
   className?: string;
-  theme?: "math" | "english";
+  theme?: "math" | "english" | "chinese";
   badge?: string;
   /** 教师首页主入口：更大、更醒目 */
   emphasis?: boolean;
@@ -15,23 +15,28 @@ export type SubjectCardProps = {
   placeholder?: boolean;
 };
 
-const THEME_SHELL: Record<"math" | "english", string> = {
+const THEME_SHELL: Record<"math" | "english" | "chinese", string> = {
   math: "border-sky-300/80 bg-gradient-to-br from-sky-100/90 via-sky-50/70 to-white hover:border-sky-400 hover:shadow-[0_16px_48px_rgba(56,189,248,0.22)]",
+  chinese:
+    "border-amber-300/80 bg-gradient-to-br from-amber-100/90 via-amber-50/70 to-white hover:border-amber-400 hover:shadow-[0_16px_48px_rgba(245,158,11,0.2)]",
   english: "border-rose-300/70 bg-gradient-to-br from-rose-100/80 via-rose-50/60 to-white hover:border-rose-400 hover:shadow-[0_16px_48px_rgba(251,113,133,0.18)]",
 };
 
-const THEME_ICON: Record<"math" | "english", typeof Calculator> = {
+const THEME_ICON: Record<"math" | "english" | "chinese", typeof Calculator> = {
   math: Calculator,
+  chinese: BookOpen,
   english: Languages,
 };
 
-const THEME_ICON_BG: Record<"math" | "english", string> = {
+const THEME_ICON_BG: Record<"math" | "english" | "chinese", string> = {
   math: "bg-sky-200/90 text-sky-700 ring-sky-300/60",
+  chinese: "bg-amber-200/90 text-amber-800 ring-amber-300/60",
   english: "bg-rose-200/80 text-rose-700 ring-rose-300/50",
 };
 
-const BADGE_CLASS: Record<"math" | "english", string> = {
+const BADGE_CLASS: Record<"math" | "english" | "chinese", string> = {
   math: "bg-sky-200 text-sky-900 ring-sky-300/80",
+  chinese: "bg-amber-200 text-amber-950 ring-amber-300/80",
   english: "bg-rose-200 text-rose-900 ring-rose-300/80",
 };
 

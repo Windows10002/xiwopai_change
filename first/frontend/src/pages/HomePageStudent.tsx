@@ -49,7 +49,7 @@ export function HomePageStudent() {
                   <span className="ml-2 text-small font-semibold text-ink-muted">· 和同桌一起更轻松交作业</span>
                 </p>
                 <p className="mx-auto mt-4 max-w-lg text-small leading-relaxed text-ink-muted lg:mx-0">
-                  数学作业、英语作文：拍一拍就能看分数、过程分和评语。错题会自动收录到错题本。
+                  数学、英语、语文作业：拍一拍就能看分数、过程分和评语。错题会自动收录到错题本。
                 </p>
                 <div className="mx-auto mt-4 flex flex-wrap justify-center gap-2 lg:mx-0 lg:justify-start">
                   {CAMPUS_TAGS.map((tag) => (
@@ -149,11 +149,11 @@ export function HomePageStudent() {
                 className="animate-fade-up-in stagger-4"
               />
               <SubjectCard
-                title="英语作文"
+                title="英语作业"
                 description="内容、语言、结构多维打分，亮点与纠错一次看完。"
                 to="/english"
                 theme="english"
-                badge="作文本"
+                badge="外语"
                 className="animate-fade-up-in stagger-5"
               />
             </div>

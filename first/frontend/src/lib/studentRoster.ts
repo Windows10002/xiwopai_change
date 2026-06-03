@@ -58,3 +58,30 @@ export function rememberStudentFromGrading(name: string): void {
   if (!t || t.length < 2) return;
   addRosterStudent({ name: t });
 }
+
+/** 演示：七年级 / 八年级示例名册（仅 localStorage 为空时写入） */
+export function seedDemoRosterIfEmpty(): RosterStudent[] {
+  const existing = loadStudentRoster();
+  if (existing.length > 0) return existing;
+  const demo: Array<{ name: string; className: string; studentNo: string }> = [
+    { name: "张三", className: "七年级1班", studentNo: "20270101" },
+    { name: "李四", className: "七年级1班", studentNo: "20270102" },
+    { name: "王五", className: "七年级2班", studentNo: "20270201" },
+    { name: "赵六", className: "八年级1班", studentNo: "20280101" },
+    { name: "钱七", className: "八年级1班", studentNo: "20280102" },
+  ];
+  const rows = demo.map((d) => ({
+    id: randomId(),
+    name: d.name,
+    className: d.className,
+    studentNo: d.studentNo,
+  }));
+  saveStudentRoster(rows);
+  return rows;
+}
+
+export function rosterStudentsForClass(className: string): RosterStudent[] {
+  const cn = className.trim();
+  if (!cn) return loadStudentRoster();
+  return loadStudentRoster().filter((s) => (s.className || "").trim() === cn);
+}

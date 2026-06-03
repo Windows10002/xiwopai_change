@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { ImageIcon, Minus, Pin, PinOff, Plus, X } from "lucide-react";
+import { ImageIcon, Loader2, Minus, Pin, PinOff, Plus, X } from "lucide-react";
 import type { ErrorRegionPct } from "@/types/grading";
 import { IpMascotCameraEmpty } from "@/components/atoms/IpMascot";
 import { CUTE_ICON } from "@/components/atoms/cuteIcon";
+import { fetchAuthenticatedBlobUrl } from "@/lib/authenticatedMedia";
 
 export type PaperMarkKind = "ok" | "bad" | "half" | "neutral";
 
@@ -31,6 +32,8 @@ type HomeworkPreviewProps = {
   showPaperMarksOnMain?: boolean;
   /** 在父级 flex 区域内按比例铺满（保持宽高比，不裁切） */
   fillColumn?: boolean;
+  /** 通过 Bearer 拉取 /uploads 图片（学生端作业图需登录） */
+  requireAuth?: boolean;
 };
 
 function markStyle(kind: PaperMarkKind): string {
@@ -153,12 +156,15 @@ export function HomeworkPreview({
   paperMarkGrid = null,
   showPaperMarksOnMain = false,
   fillColumn = false,
+  requireAuth = false,
 }: HomeworkPreviewProps) {
   const [zoomOpen, setZoomOpen] = useState(false);
   const [zoomScale, setZoomScale] = useState(1);
   const [pinned, setPinned] = useState(false);
   const [pinBox, setPinBox] = useState<PinBox | null>(null);
   const [imgFailed, setImgFailed] = useState(false);
+  const [authBlobUrl, setAuthBlobUrl] = useState<string | null>(null);
+  const [authLoading, setAuthLoading] = useState(false);
   const [pinPan, setPinPan] = useState({ x: 0, y: 0 });
   const [pinScale, setPinScale] = useState(1);
 
@@ -166,9 +172,37 @@ export function HomeworkPreview({
   const resizeRef = useRef<{ ox: number; oy: number; sw: number; sh: number; sx: number; sy: number } | null>(null);
   const pinImageDragRef = useRef(false);
 
+  const displayUrl = requireAuth && imageUrl ? authBlobUrl : imageUrl;
+
   useEffect(() => {
     setImgFailed(false);
-  }, [imageUrl]);
+  }, [imageUrl, requireAuth]);
+
+  useEffect(() => {
+    if (!requireAuth || !imageUrl?.trim()) {
+      setAuthBlobUrl(null);
+      setAuthLoading(false);
+      return;
+    }
+    let cancelled = false;
+    let objectUrl = "";
+    setAuthLoading(true);
+    void fetchAuthenticatedBlobUrl(imageUrl)
+      .then((url) => {
+        objectUrl = url;
+        if (!cancelled) setAuthBlobUrl(url);
+      })
+      .catch(() => {
+        if (!cancelled) setImgFailed(true);
+      })
+      .finally(() => {
+        if (!cancelled) setAuthLoading(false);
+      });
+    return () => {
+      cancelled = true;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [imageUrl, requireAuth]);
 
   useEffect(() => {
     if (!zoomOpen) setZoomScale(1);
@@ -340,6 +374,14 @@ export function HomeworkPreview({
     );
   }
 
+  if (requireAuth && authLoading && !displayUrl) {
+    return (
+      <div className="glass-panel flex items-center justify-center rounded-card px-4 py-16 text-ink-muted">
+        <Loader2 className="h-6 w-6 animate-spin" {...CUTE_ICON} aria-hidden />
+      </div>
+    );
+  }
+
   const footerParts = [
     errorRegions.length > 0 ? "图示红框为演示参考（仅供参考）。" : null,
     imageCaption ?? null,
@@ -365,7 +407,7 @@ export function HomeworkPreview({
               </div>
             ) : (
               <img
-                src={imageUrl}
+                src={displayUrl || imageUrl}
                 alt="作业预览"
                 className={
                   fillColumn
@@ -478,7 +520,7 @@ export function HomeworkPreview({
                     }}
                   >
                     <img
-                      src={imageUrl}
+                      src={displayUrl || imageUrl}
                       alt=""
                       draggable={false}
                       className="max-h-[min(70vh,32rem)] max-w-full object-contain object-center sm:max-h-[min(72vh,36rem)]"
@@ -525,7 +567,7 @@ export function HomeworkPreview({
                   onWheel={onZoomWheel}
                 >
                   <img
-                    src={imageUrl}
+                    src={displayUrl || imageUrl}
                     alt=""
                     className="mx-auto block min-h-[40vh] w-full max-w-full object-contain object-center p-2"
                     style={{ transform: `scale(${zoomScale})`, transformOrigin: "center top" }}

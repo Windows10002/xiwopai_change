@@ -3,7 +3,11 @@ import { createRoot } from "react-dom/client";
 import { BrowserRouter } from "react-router-dom";
 import App from "./App";
 import ipBrandPng from "./assets/ip";
+import { AuthSlotRouterSync } from "@/components/organisms/AuthSlotRouterSync";
+import { initAuthSlotFromUrl } from "@/lib/authSlot";
 import "./index.css";
+
+initAuthSlotFromUrl();
 
 {
   const link = document.querySelector<HTMLLinkElement>('link[rel="icon"]');
@@ -22,6 +26,7 @@ import "./index.css";
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <BrowserRouter>
+      <AuthSlotRouterSync />
       <App />
     </BrowserRouter>
   </StrictMode>

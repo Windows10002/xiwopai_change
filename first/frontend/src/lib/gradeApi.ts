@@ -404,8 +404,11 @@ export function mapEnglishResult(raw: Record<string, unknown>): GradingResultDet
   };
 }
 
-export function mapApiResultToDetail(subject: "math" | "english", raw: Record<string, unknown>): GradingResultDetail {
-  return subject === "math" ? mapMathResult(raw) : mapEnglishResult(raw);
+export function mapApiResultToDetail(
+  subject: "math" | "english" | "chinese",
+  raw: Record<string, unknown>,
+): GradingResultDetail {
+  return subject === "english" ? mapEnglishResult(raw) : mapMathResult(raw);
 }
 
 /** 选图后老师可选填，经 FormData 传给 `/api/grade` 以辅助模型批改 */
@@ -432,7 +435,7 @@ const GRADE_TIMEOUT_MS = 5 * 60 * 1000;
  */
 export async function submitGrade(
   file: File,
-  subject: "math" | "english",
+  subject: "math" | "english" | "chinese",
   ctx?: GradeRequestContext,
 ): Promise<{
   detail: GradingResultDetail;

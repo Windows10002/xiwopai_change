@@ -2,20 +2,109 @@ import { apiFetch, parseApiJson, type ApiJson } from "@/lib/apiClient";
 import type { GradingResultDetail } from "@/types/grading";
 import { mapApiResultToDetail } from "@/lib/gradeApi";
 
+export type WorkspaceSubject = "math" | "english" | "chinese";
+
 export type WorkspaceAssignment = {
   id: string;
   teacher_sub: string;
   class_name: string;
-  subject: "math" | "english";
+  subject: WorkspaceSubject;
   title: string;
   description: string;
   due_at: string;
   status: "draft" | "published";
   target_student_names: string[];
+  answer_key?: string;
+  answer_key_image?: string;
+  answer_key_image_url?: string;
+  send_answer_to_parent?: boolean;
   created_at: string;
   published_at: string;
   submission_count?: number;
   published_count?: number;
+  /** 是否已过截止时间 */
+  is_overdue?: boolean;
+  /** 教师是否开放截止后补交 */
+  allow_late_submit?: boolean;
+  /** 学生当前是否允许交卷 */
+  can_submit?: boolean;
+  /** 截止前可重交 */
+  resubmit_allowed?: boolean;
+  submission_id?: string;
+  max_submissions?: number;
+  allowed_formats?: string[];
+  scoring_rubric?: string;
+  teacher_attachment_note?: string;
+  teacher_attachment_image?: string;
+  teacher_attachment_image_url?: string;
+  notify_student_parent?: boolean;
+  scheduled_publish_at?: string;
+  notify_sent?: boolean;
+  /** student | teacher | both */
+  submission_mode?: "student" | "teacher" | "both";
+  hide_answer_from_student?: boolean;
+  answer_released_at?: string;
+  answer_released?: boolean;
+  answer_visible_to_student?: boolean;
+  allows_student_submit?: boolean;
+};
+
+export type AssignmentPayload = {
+  subject: WorkspaceSubject;
+  title: string;
+  description?: string;
+  class_name: string;
+  due_at: string;
+  target_student_names: string[];
+  answer_key?: string;
+  answer_key_image?: string;
+  clear_answer_key_image?: boolean;
+  send_answer_to_parent?: boolean;
+  publish?: boolean;
+  max_submissions?: number;
+  allowed_formats?: string[];
+  scoring_rubric?: string;
+  teacher_attachment_note?: string;
+  teacher_attachment_image?: string;
+  clear_teacher_attachment_image?: boolean;
+  notify_student_parent?: boolean;
+  scheduled_publish_at?: string;
+  submission_mode?: "student" | "teacher" | "both";
+  hide_answer_from_student?: boolean;
+};
+
+export type AssignmentUploadFiles = {
+  answerKeyFile?: File | null;
+  teacherAttachmentFile?: File | null;
+};
+
+export type AssignmentReportRow = {
+  student_name: string;
+  status: string;
+  status_label?: string;
+  score_percent?: number | null;
+  submitted_at: string;
+  updated_at: string;
+  version_count: number;
+  submission_id?: string;
+  weak_points?: string[];
+  comment_preview?: string;
+  published_to_student?: boolean;
+};
+
+export type AssignmentReport = {
+  assignment: WorkspaceAssignment;
+  target_count: number;
+  submitted: AssignmentReportRow[];
+  not_submitted: string[];
+  submission_rate: number;
+  avg_score: number | null;
+  notify_sent: boolean;
+  pending_review_count?: number;
+  unpublished_graded_count?: number;
+  score_distribution?: Record<string, number>;
+  weak_knowledge_ranked?: Array<{ name: string; count: number }>;
+  answer_released?: boolean;
 };
 
 export type WorkspaceGradingRecord = {
@@ -47,7 +136,7 @@ export type WorkspaceSubmission = {
   teacher_sub: string;
   student_name: string;
   submitted_by_role: string;
-  subject: "math" | "english";
+  subject: WorkspaceSubject;
   file_name: string;
   image_filename: string;
   image_url: string;
@@ -65,25 +154,115 @@ export type WorkspaceSubmission = {
   variant_tasks?: WorkspaceVariantTask[];
 };
 
+export type InboxCounts = {
+  corrections_pending: number;
+  pending_review: number;
+  unpublished_graded: number;
+};
+
 export function submissionToDetail(sub: WorkspaceSubmission): GradingResultDetail | null {
   const raw = sub.grading_record?.result;
   if (!raw || typeof raw !== "object") return null;
   return mapApiResultToDetail(sub.subject, raw as Record<string, unknown>);
 }
 
-export async function createAssignment(body: {
-  subject: "math" | "english";
-  title: string;
-  description?: string;
-  class_name?: string;
-  due_at?: string;
-  target_student_names?: string[];
-  publish?: boolean;
-}): Promise<WorkspaceAssignment> {
-  const res = await apiFetch("/api/assignments", { method: "POST", body: JSON.stringify(body) });
+function assignmentWriteRequestInit(
+  body: AssignmentPayload | Partial<AssignmentPayload>,
+  files?: AssignmentUploadFiles | null,
+): RequestInit {
+  if (files?.answerKeyFile || files?.teacherAttachmentFile) {
+    const fd = new FormData();
+    fd.append("payload", JSON.stringify(body));
+    if (files.answerKeyFile) fd.append("answer_key_file", files.answerKeyFile);
+    if (files.teacherAttachmentFile) fd.append("teacher_attachment_file", files.teacherAttachmentFile);
+    return { body: fd };
+  }
+  return { body: JSON.stringify(body) };
+}
+
+export async function createAssignment(
+  body: AssignmentPayload,
+  files?: AssignmentUploadFiles | null,
+): Promise<WorkspaceAssignment> {
+  const res = await apiFetch("/api/assignments", {
+    method: "POST",
+    ...assignmentWriteRequestInit(body, files),
+  });
   const json = await parseApiJson<ApiJson & { assignment?: WorkspaceAssignment }>(res);
   if (!json.assignment) throw new Error("创建任务失败");
   return json.assignment;
+}
+
+export async function updateAssignment(
+  id: string,
+  body: Partial<AssignmentPayload>,
+  files?: AssignmentUploadFiles | null,
+): Promise<WorkspaceAssignment> {
+  const res = await apiFetch(`/api/assignments/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    ...assignmentWriteRequestInit(body, files),
+  });
+  const json = await parseApiJson<ApiJson & { assignment?: WorkspaceAssignment }>(res);
+  if (!json.assignment) throw new Error("更新任务失败");
+  return json.assignment;
+}
+
+export async function deleteAssignment(id: string): Promise<void> {
+  const res = await apiFetch(`/api/assignments/${encodeURIComponent(id)}`, { method: "DELETE" });
+  await parseApiJson(res);
+}
+
+export async function setAssignmentLateSubmit(id: string, enabled: boolean): Promise<WorkspaceAssignment> {
+  const res = await apiFetch(`/api/assignments/${encodeURIComponent(id)}/late-submit`, {
+    method: "POST",
+    body: JSON.stringify({ enabled }),
+  });
+  const json = await parseApiJson<ApiJson & { assignment?: WorkspaceAssignment }>(res);
+  if (!json.assignment) throw new Error("操作失败");
+  return json.assignment;
+}
+
+export async function fetchAssignmentReport(assignmentId: string): Promise<AssignmentReport> {
+  const res = await apiFetch(`/api/assignments/${encodeURIComponent(assignmentId)}/report`);
+  const json = await parseApiJson<ApiJson & { report?: AssignmentReport }>(res);
+  if (!json.report) throw new Error("加载报告失败");
+  return json.report;
+}
+
+export async function returnSubmissionForCorrection(
+  submissionId: string,
+  note?: string,
+): Promise<WorkspaceSubmission> {
+  const res = await apiFetch(`/api/submissions/${encodeURIComponent(submissionId)}/return`, {
+    method: "POST",
+    body: JSON.stringify({ note: note ?? "" }),
+  });
+  const json = await parseApiJson<ApiJson & { submission?: WorkspaceSubmission }>(res);
+  if (!json.submission) throw new Error("退回失败");
+  return json.submission;
+}
+
+export function exportReportCsv(report: AssignmentReport): string {
+  const lines = ["学生,状态,得分,提交时间,版本数"];
+  for (const row of report.submitted) {
+    lines.push(
+      [
+        row.student_name,
+        row.status,
+        row.score_percent ?? "",
+        row.submitted_at,
+        row.version_count,
+      ].join(","),
+    );
+  }
+  if (report.not_submitted.length) {
+    lines.push("");
+    lines.push("未交名单");
+    for (const name of report.not_submitted) {
+      lines.push(`${name},未提交,,,`);
+    }
+  }
+  return "\ufeff" + lines.join("\n");
 }
 
 export async function fetchTeacherAssignments(): Promise<WorkspaceAssignment[]> {
@@ -92,8 +271,26 @@ export async function fetchTeacherAssignments(): Promise<WorkspaceAssignment[]> 
   return json.items ?? [];
 }
 
-export async function fetchStudentTodo(): Promise<{ todo: WorkspaceAssignment[]; assignments: WorkspaceAssignment[] }> {
-  const res = await apiFetch("/api/assignments/my");
+export async function fetchAllAssignments(): Promise<WorkspaceAssignment[]> {
+  const res = await apiFetch("/api/assignments/all");
+  const json = await parseApiJson<ApiJson & { items?: WorkspaceAssignment[] }>(res);
+  return json.items ?? [];
+}
+
+export async function fetchParentAssignments(): Promise<{ child_name: string; items: WorkspaceAssignment[] }> {
+  const res = await apiFetch("/api/assignments/parent");
+  const json = await parseApiJson<
+    ApiJson & { child_name?: string; items?: WorkspaceAssignment[] }
+  >(res);
+  return { child_name: json.child_name ?? "", items: json.items ?? [] };
+}
+
+export async function fetchStudentTodo(
+  studentName?: string,
+): Promise<{ todo: WorkspaceAssignment[]; assignments: WorkspaceAssignment[] }> {
+  const name = studentName?.trim() ?? "";
+  const qs = name ? `?student_name=${encodeURIComponent(name)}` : "";
+  const res = await apiFetch(`/api/assignments/my${qs}`, undefined, { studentName: name || undefined });
   const json = await parseApiJson<ApiJson & { todo?: WorkspaceAssignment[]; assignments?: WorkspaceAssignment[] }>(res);
   return { todo: json.todo ?? [], assignments: json.assignments ?? [] };
 }
@@ -101,6 +298,37 @@ export async function fetchStudentTodo(): Promise<{ todo: WorkspaceAssignment[];
 export async function publishAssignment(id: string): Promise<void> {
   const res = await apiFetch(`/api/assignments/${encodeURIComponent(id)}/publish`, { method: "POST" });
   await parseApiJson(res);
+}
+
+export async function releaseAssignmentAnswer(id: string): Promise<WorkspaceAssignment> {
+  const res = await apiFetch(`/api/assignments/${encodeURIComponent(id)}/release-answer`, { method: "POST" });
+  const json = await parseApiJson<ApiJson & { assignment?: WorkspaceAssignment }>(res);
+  if (!json.assignment) throw new Error("开放答案失败");
+  return json.assignment;
+}
+
+export async function revokeAssignmentAnswer(id: string): Promise<WorkspaceAssignment> {
+  const res = await apiFetch(`/api/assignments/${encodeURIComponent(id)}/revoke-answer`, { method: "POST" });
+  const json = await parseApiJson<ApiJson & { assignment?: WorkspaceAssignment }>(res);
+  if (!json.assignment) throw new Error("取消开放答案失败");
+  return json.assignment;
+}
+
+export type StudentPendingRelease = {
+  id: string;
+  assignment_id: string;
+  student_name: string;
+  status: string;
+  created_at: string;
+  assignment?: WorkspaceAssignment | null;
+};
+
+export async function publishPendingSubmissions(assignmentId: string): Promise<number> {
+  const res = await apiFetch(`/api/assignments/${encodeURIComponent(assignmentId)}/publish-pending`, {
+    method: "POST",
+  });
+  const json = await parseApiJson<ApiJson & { count?: number }>(res);
+  return json.count ?? 0;
 }
 
 export async function submitAssignmentWork(
@@ -122,7 +350,7 @@ export async function submitAssignmentWork(
       submission?: WorkspaceSubmission;
       result?: Record<string, unknown>;
       image_url?: string;
-      subject?: "math" | "english";
+      subject?: WorkspaceSubject;
     }
   >(res);
   const subject = json.subject ?? json.submission?.subject ?? "math";
@@ -134,31 +362,43 @@ export async function submitAssignmentWork(
   };
 }
 
-export async function fetchMySubmissions(): Promise<{
+export async function fetchMySubmissions(studentName?: string): Promise<{
   items: WorkspaceSubmission[];
   variant_tasks: WorkspaceVariantTask[];
+  pending_release: StudentPendingRelease[];
 }> {
-  const res = await apiFetch("/api/submissions/my");
-  const json = await parseApiJson<
-    ApiJson & { items?: WorkspaceSubmission[]; variant_tasks?: WorkspaceVariantTask[] }
-  >(res);
-  return { items: json.items ?? [], variant_tasks: json.variant_tasks ?? [] };
-}
-
-export async function fetchTeacherInbox(): Promise<{
-  items: WorkspaceSubmission[];
-  counts: { corrections_pending: number; unpublished_graded: number };
-}> {
-  const res = await apiFetch("/api/submissions/inbox");
+  const name = studentName?.trim() ?? "";
+  const qs = name ? `?student_name=${encodeURIComponent(name)}` : "";
+  const res = await apiFetch(`/api/submissions/my${qs}`, undefined, { studentName: name || undefined });
   const json = await parseApiJson<
     ApiJson & {
       items?: WorkspaceSubmission[];
-      counts?: { corrections_pending: number; unpublished_graded: number };
+      variant_tasks?: WorkspaceVariantTask[];
+      pending_release?: StudentPendingRelease[];
     }
   >(res);
   return {
     items: json.items ?? [],
-    counts: json.counts ?? { corrections_pending: 0, unpublished_graded: 0 },
+    variant_tasks: json.variant_tasks ?? [],
+    pending_release: json.pending_release ?? [],
+  };
+}
+
+export async function fetchTeacherInbox(status?: string): Promise<{
+  items: WorkspaceSubmission[];
+  counts: InboxCounts;
+}> {
+  const qs = status ? `?status=${encodeURIComponent(status)}` : "";
+  const res = await apiFetch(`/api/submissions/inbox${qs}`);
+  const json = await parseApiJson<
+    ApiJson & {
+      items?: WorkspaceSubmission[];
+      counts?: InboxCounts;
+    }
+  >(res);
+  return {
+    items: json.items ?? [],
+    counts: json.counts ?? { corrections_pending: 0, pending_review: 0, unpublished_graded: 0 },
   };
 }
 
@@ -213,13 +453,26 @@ export async function completeVariantTask(taskId: string): Promise<void> {
   await parseApiJson(res);
 }
 
-export async function fetchInboxCounts(): Promise<{ corrections_pending: number; unpublished_graded: number }> {
+export async function fetchInboxCounts(): Promise<InboxCounts> {
   const res = await apiFetch("/api/workspace/inbox-counts");
   const json = await parseApiJson<
-    ApiJson & { corrections_pending?: number; unpublished_graded?: number }
+    ApiJson & { corrections_pending?: number; pending_review?: number; unpublished_graded?: number }
   >(res);
+  const pending = json.pending_review ?? json.unpublished_graded ?? 0;
   return {
     corrections_pending: json.corrections_pending ?? 0,
-    unpublished_graded: json.unpublished_graded ?? 0,
+    pending_review: pending,
+    unpublished_graded: pending,
   };
+}
+
+export function groupSubmissionsByAssignment(items: WorkspaceSubmission[]): Map<string, WorkspaceSubmission[]> {
+  const map = new Map<string, WorkspaceSubmission[]>();
+  for (const sub of items) {
+    const key = sub.assignment_id || "_none";
+    const list = map.get(key) ?? [];
+    list.push(sub);
+    map.set(key, list);
+  }
+  return map;
 }

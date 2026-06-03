@@ -3181,12 +3181,39 @@ def normalize_math_result(data: dict) -> dict:
     return data
 
 
-def _teacher_context_suffix_math(grade_level: str, teacher_note: str) -> str:
+def _teacher_context_suffix_math(
+    grade_level: str,
+    teacher_note: str,
+    answer_key: str = "",
+    scoring_rubric: str = "",
+    *,
+    has_answer_key_image: bool = False,
+) -> str:
     g = (grade_level or "").strip()
     n = (teacher_note or "").strip()
-    if not g and not n:
+    ak = (answer_key or "").strip()
+    rub = (scoring_rubric or "").strip()
+    if not g and not n and not ak and not rub and not has_answer_key_image:
         return ""
     parts = ["\n\n【任课教师补充说明（请纳入批改语境；若与卷面或题干明显冲突以卷面与题干为准）】"]
+    if has_answer_key_image:
+        parts.append(
+            "【参考答案】已在前一张附图中给出，请对照该图核对学生各题作答与过程，提高判分一致性与准确率；"
+            "卷面看不清或学生未作答时仍以卷面可见内容为准，勿臆造学生步骤。"
+        )
+    elif ak:
+        parts.append(
+            "【教师提供的参考答案（选填，请作为判分重要依据）】\n"
+            f"{ak}\n"
+            "请对照参考答案核对学生各题作答与过程，提高判分一致性与准确率；"
+            "若卷面与参考答案在书写上等价（如分数/小数/单位等价）应判对；"
+            "卷面看不清或学生未作答时仍以卷面可见内容为准，勿臆造学生步骤。"
+        )
+    if rub:
+        parts.append(
+            f"【评分细则】\n{rub}\n"
+            "请在过程分与结果分上尽量按细则把握。"
+        )
     if g:
         parts.append(
             f"学生所在年级（老师填写）：{g}。请按该学段课标与常见认知水平把握判分尺度、总评语气与 reason 详略；不要超纲使用明显超出该学段要求的术语硬套学生。"
@@ -3198,7 +3225,15 @@ def _teacher_context_suffix_math(grade_level: str, teacher_note: str) -> str:
     return "\n".join(parts)
 
 
-def call_ai_math(image_path: str, *, grade_level: str = "", teacher_note: str = "") -> dict:
+def call_ai_math(
+    image_path: str,
+    *,
+    grade_level: str = "",
+    teacher_note: str = "",
+    answer_key: str = "",
+    answer_key_image: str = "",
+    scoring_rubric: str = "",
+) -> dict:
     if dashscope is None:
         logging.error("dashscope 未安装，无法调用视觉批改 API")
         return None
@@ -3207,11 +3242,23 @@ def call_ai_math(image_path: str, *, grade_level: str = "", teacher_note: str = 
             b64 = base64.b64encode(f.read()).decode()
         image_uri = f"data:{get_mime_type(image_path)};base64,{b64}"
 
-        suffix = _teacher_context_suffix_math(grade_level, teacher_note)
-        messages = [{"role": "user", "content": [
-            {"image": image_uri},
-            {"text": MATH_PROMPT + suffix}
-        ]}]
+        suffix = _teacher_context_suffix_math(
+            grade_level,
+            teacher_note,
+            answer_key,
+            scoring_rubric,
+            has_answer_key_image=bool((answer_key_image or "").strip() and os.path.isfile(answer_key_image)),
+        )
+        content: list[dict] = []
+        ak_path = (answer_key_image or "").strip()
+        if ak_path and os.path.isfile(ak_path):
+            with open(ak_path, "rb") as f:
+                ak_b64 = base64.b64encode(f.read()).decode()
+            content.append({"image": f"data:{get_mime_type(ak_path)};base64,{ak_b64}"})
+            content.append({"text": "【上图】为教师提供的参考答案，请先阅读再批改下一张学生作业。"})
+        content.append({"image": image_uri})
+        content.append({"text": MATH_PROMPT + suffix})
+        messages = [{"role": "user", "content": content}]
 
         # max_length 提高可减少「只返回前几题 JSON」被截断的情况（长卷多题须完整输出 questions）
         resp = dashscope.MultiModalConversation.call(

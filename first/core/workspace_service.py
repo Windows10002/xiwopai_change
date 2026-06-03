@@ -10,6 +10,9 @@ from pathlib import Path
 from typing import Any
 
 from core.sanitize import clip_text, sanitize_grade_level, sanitize_teacher_note
+from core.workspace_deadline import enrich_assignment_deadline, student_may_submit_assignment
+from core.workspace_exam import allows_student_submit, normalize_submission_mode, strip_assignment_answers_for_viewer
+from core.workspace_grading_score import score_percent_from_result
 
 _lock = threading.Lock()
 
@@ -18,6 +21,7 @@ SUBMISSION_STATUSES = frozenset(
         "submitted",
         "grading",
         "graded",
+        "pending_review",
         "published",
         "correction_pending",
         "correction_done",
@@ -25,13 +29,19 @@ SUBMISSION_STATUSES = frozenset(
     }
 )
 
+ASSIGNMENT_SUBJECTS = frozenset({"math", "english", "chinese"})
+
 
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
 
 def _norm_student_name(name: str | None) -> str:
-    return (name or "").strip()
+    import re
+
+    s = (name or "").strip()
+    s = re.sub(r"[\u200b-\u200d\ufeff\u00a0]", "", s)
+    return s.strip()
 
 
 def _names_match(a: str | None, b: str | None) -> bool:
@@ -124,8 +134,62 @@ class WorkspaceStore:
                         FOREIGN KEY (submission_id) REFERENCES submissions(id)
                     );
                     CREATE INDEX IF NOT EXISTS idx_variants_student ON variant_tasks(student_name, status);
+
+                    CREATE TABLE IF NOT EXISTS submission_versions (
+                        id TEXT PRIMARY KEY,
+                        submission_id TEXT NOT NULL,
+                        version INTEGER NOT NULL,
+                        file_name TEXT NOT NULL DEFAULT '',
+                        image_filename TEXT NOT NULL,
+                        image_url TEXT NOT NULL DEFAULT '',
+                        created_at TEXT NOT NULL,
+                        FOREIGN KEY (submission_id) REFERENCES submissions(id)
+                    );
+                    CREATE INDEX IF NOT EXISTS idx_submission_versions ON submission_versions(submission_id, version);
                     """
                 )
+                self._migrate_columns(conn)
+
+    def _migrate_columns(self, conn: sqlite3.Connection) -> None:
+        cols = {r[1] for r in conn.execute("PRAGMA table_info(assignments)").fetchall()}
+        if "answer_key" not in cols:
+            conn.execute("ALTER TABLE assignments ADD COLUMN answer_key TEXT NOT NULL DEFAULT ''")
+        if "send_answer_to_parent" not in cols:
+            conn.execute(
+                "ALTER TABLE assignments ADD COLUMN send_answer_to_parent INTEGER NOT NULL DEFAULT 0"
+            )
+        if "allow_late_submit" not in cols:
+            conn.execute(
+                "ALTER TABLE assignments ADD COLUMN allow_late_submit INTEGER NOT NULL DEFAULT 0"
+            )
+        if "max_submissions" not in cols:
+            conn.execute("ALTER TABLE assignments ADD COLUMN max_submissions INTEGER NOT NULL DEFAULT 0")
+        if "allowed_formats_json" not in cols:
+            conn.execute(
+                "ALTER TABLE assignments ADD COLUMN allowed_formats_json TEXT NOT NULL DEFAULT '[\"jpg\",\"jpeg\",\"png\",\"webp\"]'"
+            )
+        if "scoring_rubric" not in cols:
+            conn.execute("ALTER TABLE assignments ADD COLUMN scoring_rubric TEXT NOT NULL DEFAULT ''")
+        if "teacher_attachment_note" not in cols:
+            conn.execute("ALTER TABLE assignments ADD COLUMN teacher_attachment_note TEXT NOT NULL DEFAULT ''")
+        if "notify_student_parent" not in cols:
+            conn.execute(
+                "ALTER TABLE assignments ADD COLUMN notify_student_parent INTEGER NOT NULL DEFAULT 1"
+            )
+        if "scheduled_publish_at" not in cols:
+            conn.execute("ALTER TABLE assignments ADD COLUMN scheduled_publish_at TEXT NOT NULL DEFAULT ''")
+        if "answer_key_image" not in cols:
+            conn.execute("ALTER TABLE assignments ADD COLUMN answer_key_image TEXT NOT NULL DEFAULT ''")
+        if "teacher_attachment_image" not in cols:
+            conn.execute("ALTER TABLE assignments ADD COLUMN teacher_attachment_image TEXT NOT NULL DEFAULT ''")
+        if "submission_mode" not in cols:
+            conn.execute("ALTER TABLE assignments ADD COLUMN submission_mode TEXT NOT NULL DEFAULT 'both'")
+        if "hide_answer_from_student" not in cols:
+            conn.execute(
+                "ALTER TABLE assignments ADD COLUMN hide_answer_from_student INTEGER NOT NULL DEFAULT 0"
+            )
+        if "answer_released_at" not in cols:
+            conn.execute("ALTER TABLE assignments ADD COLUMN answer_released_at TEXT NOT NULL DEFAULT ''")
 
     def create_assignment(
         self,
@@ -137,25 +201,64 @@ class WorkspaceStore:
         class_name: str = "",
         due_at: str | None = None,
         target_student_names: list[str] | None = None,
+        answer_key: str = "",
+        answer_key_image: str = "",
+        send_answer_to_parent: bool = False,
         publish: bool = False,
+        max_submissions: int = 0,
+        allowed_formats: list[str] | None = None,
+        scoring_rubric: str = "",
+        teacher_attachment_note: str = "",
+        teacher_attachment_image: str = "",
+        notify_student_parent: bool = True,
+        scheduled_publish_at: str = "",
+        submission_mode: str = "both",
+        hide_answer_from_student: bool = False,
     ) -> dict[str, Any]:
-        if subject not in {"math", "english"}:
-            raise ValueError("科目仅支持 math / english")
+        if subject not in ASSIGNMENT_SUBJECTS:
+            raise ValueError("科目仅支持 math / english / chinese")
         title = clip_text(title, 200)
         if len(title) < 2:
             raise ValueError("任务标题至少 2 个字")
+        class_name = clip_text(class_name, 80)
+        if len(class_name) < 2:
+            raise ValueError("请选择班级")
+        due = clip_text(due_at or "", 40)
+        if not due:
+            raise ValueError("请设置截止时间")
         names = [_norm_student_name(n) for n in (target_student_names or []) if _norm_student_name(n)]
+        if not names:
+            raise ValueError("请指定布置对象（至少一名学生）")
+        formats = allowed_formats or ["jpg", "jpeg", "png", "webp"]
+        formats = [f.strip().lower().lstrip(".") for f in formats if str(f).strip()]
+        if not formats:
+            formats = ["jpg", "jpeg", "png", "webp"]
+        scheduled = clip_text(scheduled_publish_at or "", 40)
         now = _now_iso()
         rec = {
             "id": uuid.uuid4().hex,
             "teacher_sub": clip_text(teacher_sub, 80),
-            "class_name": clip_text(class_name, 80),
+            "class_name": class_name,
             "subject": subject,
             "title": title,
             "description": clip_text(description, 2000),
-            "due_at": due_at or "",
+            "due_at": due,
             "status": "published" if publish else "draft",
             "target_student_names": names,
+            "answer_key": clip_text(answer_key, 8000),
+            "answer_key_image": clip_text(answer_key_image, 240),
+            "send_answer_to_parent": bool(send_answer_to_parent),
+            "allow_late_submit": False,
+            "max_submissions": max(0, int(max_submissions or 0)),
+            "allowed_formats": formats,
+            "scoring_rubric": clip_text(scoring_rubric, 4000),
+            "teacher_attachment_note": clip_text(teacher_attachment_note, 2000),
+            "teacher_attachment_image": clip_text(teacher_attachment_image, 240),
+            "notify_student_parent": bool(notify_student_parent),
+            "scheduled_publish_at": scheduled,
+            "submission_mode": normalize_submission_mode(submission_mode),
+            "hide_answer_from_student": bool(hide_answer_from_student),
+            "answer_released_at": "",
             "created_at": now,
             "published_at": now if publish else "",
         }
@@ -165,8 +268,13 @@ class WorkspaceStore:
                     """
                     INSERT INTO assignments (
                         id, teacher_sub, class_name, subject, title, description,
-                        due_at, status, target_student_names_json, created_at, published_at
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        due_at, status, target_student_names_json, answer_key, answer_key_image,
+                        send_answer_to_parent, allow_late_submit, max_submissions,
+                        allowed_formats_json, scoring_rubric, teacher_attachment_note,
+                        teacher_attachment_image, notify_student_parent, scheduled_publish_at,
+                        submission_mode, hide_answer_from_student, answer_released_at,
+                        created_at, published_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         rec["id"],
@@ -178,11 +286,273 @@ class WorkspaceStore:
                         rec["due_at"],
                         rec["status"],
                         json.dumps(names, ensure_ascii=False),
+                        rec["answer_key"],
+                        rec["answer_key_image"],
+                        1 if rec["send_answer_to_parent"] else 0,
+                        0,
+                        rec["max_submissions"],
+                        json.dumps(formats, ensure_ascii=False),
+                        rec["scoring_rubric"],
+                        rec["teacher_attachment_note"],
+                        rec["teacher_attachment_image"],
+                        1 if rec["notify_student_parent"] else 0,
+                        rec["scheduled_publish_at"],
+                        rec["submission_mode"],
+                        1 if rec["hide_answer_from_student"] else 0,
+                        rec["answer_released_at"],
                         rec["created_at"],
                         rec["published_at"],
                     ),
                 )
-        return rec
+        out = enrich_assignment_deadline(rec)
+        if publish and rec["notify_student_parent"]:
+            out["notify_sent"] = True
+        return out
+
+    def update_assignment(
+        self,
+        assignment_id: str,
+        teacher_sub: str,
+        *,
+        subject: str | None = None,
+        title: str | None = None,
+        description: str | None = None,
+        class_name: str | None = None,
+        due_at: str | None = None,
+        target_student_names: list[str] | None = None,
+        answer_key: str | None = None,
+        answer_key_image: str | None = None,
+        clear_answer_key_image: bool = False,
+        send_answer_to_parent: bool | None = None,
+        max_submissions: int | None = None,
+        allowed_formats: list[str] | None = None,
+        scoring_rubric: str | None = None,
+        teacher_attachment_note: str | None = None,
+        teacher_attachment_image: str | None = None,
+        clear_teacher_attachment_image: bool = False,
+        notify_student_parent: bool | None = None,
+        scheduled_publish_at: str | None = None,
+        submission_mode: str | None = None,
+        hide_answer_from_student: bool | None = None,
+    ) -> dict[str, Any]:
+        existing = self.get_assignment(assignment_id)
+        if not existing:
+            raise ValueError("未找到该任务")
+        if existing["teacher_sub"] != teacher_sub:
+            raise ValueError("无权操作该任务")
+        subj = subject if subject is not None else existing["subject"]
+        if subj not in ASSIGNMENT_SUBJECTS:
+            raise ValueError("科目仅支持 math / english / chinese")
+        new_title = clip_text(title if title is not None else existing["title"], 200)
+        if len(new_title) < 2:
+            raise ValueError("任务标题至少 2 个字")
+        new_class = clip_text(class_name if class_name is not None else existing["class_name"], 80)
+        if len(new_class) < 2:
+            raise ValueError("请选择班级")
+        new_due = clip_text(due_at if due_at is not None else existing["due_at"], 40)
+        if not new_due:
+            raise ValueError("请设置截止时间")
+        if target_student_names is not None:
+            names = [_norm_student_name(n) for n in target_student_names if _norm_student_name(n)]
+        else:
+            names = existing["target_student_names"]
+        if not names:
+            raise ValueError("请指定布置对象（至少一名学生）")
+        new_desc = clip_text(description if description is not None else existing["description"], 2000)
+        new_answer = (
+            clip_text(answer_key, 8000)
+            if answer_key is not None
+            else existing.get("answer_key") or ""
+        )
+        if clear_answer_key_image:
+            new_answer_img = ""
+        elif answer_key_image is not None:
+            new_answer_img = clip_text(answer_key_image, 240)
+        else:
+            new_answer_img = existing.get("answer_key_image") or ""
+        send_parent = (
+            bool(send_answer_to_parent)
+            if send_answer_to_parent is not None
+            else bool(existing.get("send_answer_to_parent"))
+        )
+        new_max = max_submissions if max_submissions is not None else int(existing.get("max_submissions") or 0)
+        new_max = max(0, int(new_max))
+        if allowed_formats is not None:
+            formats = [f.strip().lower().lstrip(".") for f in allowed_formats if str(f).strip()]
+        else:
+            formats = existing.get("allowed_formats") or ["jpg", "jpeg", "png", "webp"]
+        if not formats:
+            formats = ["jpg", "jpeg", "png", "webp"]
+        new_rubric = (
+            clip_text(scoring_rubric, 4000)
+            if scoring_rubric is not None
+            else existing.get("scoring_rubric") or ""
+        )
+        new_attach = (
+            clip_text(teacher_attachment_note, 2000)
+            if teacher_attachment_note is not None
+            else existing.get("teacher_attachment_note") or ""
+        )
+        if clear_teacher_attachment_image:
+            new_attach_img = ""
+        elif teacher_attachment_image is not None:
+            new_attach_img = clip_text(teacher_attachment_image, 240)
+        else:
+            new_attach_img = existing.get("teacher_attachment_image") or ""
+        new_notify = (
+            bool(notify_student_parent)
+            if notify_student_parent is not None
+            else bool(existing.get("notify_student_parent", True))
+        )
+        new_scheduled = (
+            clip_text(scheduled_publish_at or "", 40)
+            if scheduled_publish_at is not None
+            else existing.get("scheduled_publish_at") or ""
+        )
+        new_mode = (
+            normalize_submission_mode(submission_mode)
+            if submission_mode is not None
+            else normalize_submission_mode(existing.get("submission_mode"))
+        )
+        new_hide_answer = (
+            bool(hide_answer_from_student)
+            if hide_answer_from_student is not None
+            else bool(existing.get("hide_answer_from_student"))
+        )
+        with _lock:
+            with self._connect() as conn:
+                conn.execute(
+                    """
+                    UPDATE assignments SET
+                        subject = ?, title = ?, description = ?, class_name = ?,
+                        due_at = ?, target_student_names_json = ?, answer_key = ?,
+                        answer_key_image = ?, send_answer_to_parent = ?, max_submissions = ?,
+                        allowed_formats_json = ?, scoring_rubric = ?,
+                        teacher_attachment_note = ?, teacher_attachment_image = ?,
+                        notify_student_parent = ?, scheduled_publish_at = ?,
+                        submission_mode = ?, hide_answer_from_student = ?
+                    WHERE id = ?
+                    """,
+                    (
+                        subj,
+                        new_title,
+                        new_desc,
+                        new_class,
+                        new_due,
+                        json.dumps(names, ensure_ascii=False),
+                        new_answer,
+                        new_answer_img,
+                        1 if send_parent else 0,
+                        new_max,
+                        json.dumps(formats, ensure_ascii=False),
+                        new_rubric,
+                        new_attach,
+                        new_attach_img,
+                        1 if new_notify else 0,
+                        new_scheduled,
+                        new_mode,
+                        1 if new_hide_answer else 0,
+                        assignment_id,
+                    ),
+                )
+        return enrich_assignment_deadline(self.get_assignment(assignment_id) or {})
+
+    def release_assignment_answer(self, assignment_id: str, teacher_sub: str) -> dict[str, Any]:
+        existing = self.get_assignment(assignment_id)
+        if not existing:
+            raise ValueError("未找到该任务")
+        if existing["teacher_sub"] != teacher_sub:
+            raise ValueError("无权操作该任务")
+        now = _now_iso()
+        with _lock:
+            with self._connect() as conn:
+                conn.execute(
+                    "UPDATE assignments SET answer_released_at = ? WHERE id = ?",
+                    (now, assignment_id),
+                )
+        return enrich_assignment_deadline(self.get_assignment(assignment_id) or {})
+
+    def revoke_assignment_answer(self, assignment_id: str, teacher_sub: str) -> dict[str, Any]:
+        existing = self.get_assignment(assignment_id)
+        if not existing:
+            raise ValueError("未找到该任务")
+        if existing["teacher_sub"] != teacher_sub:
+            raise ValueError("无权操作该任务")
+        with _lock:
+            with self._connect() as conn:
+                conn.execute(
+                    "UPDATE assignments SET answer_released_at = '' WHERE id = ?",
+                    (assignment_id,),
+                )
+        return enrich_assignment_deadline(self.get_assignment(assignment_id) or {})
+
+    def publish_pending_submissions_for_assignment(
+        self, assignment_id: str, teacher_sub: str
+    ) -> list[str]:
+        """批量下发该任务下已批改未发布的提交，返回 submission id 列表。"""
+        assignment = self.get_assignment(assignment_id)
+        if not assignment:
+            raise ValueError("未找到该任务")
+        if assignment["teacher_sub"] != teacher_sub:
+            raise ValueError("无权操作该任务")
+        subs = self.list_submissions(assignment_id=assignment_id, teacher_sub=teacher_sub, limit=500)
+        published_ids: list[str] = []
+        for sub in subs:
+            if sub.get("status") in {"pending_review", "graded"}:
+                self.publish_submission(sub["id"], teacher_sub)
+                published_ids.append(sub["id"])
+        return published_ids
+
+    def resolve_upload_image_path(self, upload_folder: str | Path, filename: str) -> str:
+        fn = clip_text(filename or "", 240)
+        if not fn:
+            return ""
+        path = Path(upload_folder) / fn
+        return str(path) if path.is_file() else ""
+
+    def resolve_answer_key_image_path(self, upload_folder: str | Path, assignment: dict[str, Any]) -> str:
+        return self.resolve_upload_image_path(upload_folder, str(assignment.get("answer_key_image") or ""))
+
+    def set_allow_late_submit(self, assignment_id: str, teacher_sub: str, *, enabled: bool) -> dict[str, Any]:
+        existing = self.get_assignment(assignment_id)
+        if not existing:
+            raise ValueError("未找到该任务")
+        if existing["teacher_sub"] != teacher_sub:
+            raise ValueError("无权操作该任务")
+        if existing.get("status") != "published":
+            raise ValueError("仅已发布任务可设置补交")
+        with _lock:
+            with self._connect() as conn:
+                conn.execute(
+                    "UPDATE assignments SET allow_late_submit = ? WHERE id = ?",
+                    (1 if enabled else 0, assignment_id),
+                )
+        return enrich_assignment_deadline(self.get_assignment(assignment_id) or {})
+
+    def delete_assignment(self, assignment_id: str, teacher_sub: str) -> None:
+        existing = self.get_assignment(assignment_id)
+        if not existing:
+            raise ValueError("未找到该任务")
+        if existing["teacher_sub"] != teacher_sub:
+            raise ValueError("无权操作该任务")
+        stats = self.assignment_submission_stats(assignment_id)
+        if stats["submission_count"] > 0:
+            raise ValueError("已有学生提交，无法删除")
+        with _lock:
+            with self._connect() as conn:
+                conn.execute("DELETE FROM assignments WHERE id = ?", (assignment_id,))
+
+    def list_all_assignments(self, *, limit: int = 200) -> list[dict[str, Any]]:
+        with _lock:
+            with self._connect() as conn:
+                rows = conn.execute(
+                    "SELECT * FROM assignments ORDER BY created_at DESC LIMIT ?",
+                    (limit,),
+                ).fetchall()
+        items = [self._assignment_row(r) for r in rows]
+        for a in items:
+            a.update(self.assignment_submission_stats(a["id"]))
+        return [enrich_assignment_deadline(a) for a in items]
 
     def publish_assignment(self, assignment_id: str, teacher_sub: str) -> dict[str, Any]:
         now = _now_iso()
@@ -197,7 +567,7 @@ class WorkspaceStore:
                     "UPDATE assignments SET status = 'published', published_at = ? WHERE id = ?",
                     (now, assignment_id),
                 )
-        return self.get_assignment(assignment_id) or {}
+        return enrich_assignment_deadline(self.get_assignment(assignment_id) or {})
 
     def get_assignment(self, assignment_id: str) -> dict[str, Any] | None:
         with _lock:
@@ -234,15 +604,40 @@ class WorkspaceStore:
                 a
                 for a in items
                 if a["status"] == "published"
-                and (not a["target_student_names"] or sn in a["target_student_names"])
+                and (
+                    not a["target_student_names"]
+                    or any(_names_match(n, sn) for n in a["target_student_names"])
+                )
             ]
-        return items
+        return [enrich_assignment_deadline(a) for a in items]
+
+    def list_assignments_for_parent(self, child_name: str, *, limit: int = 100) -> list[dict[str, Any]]:
+        sn = _norm_student_name(child_name)
+        if not sn:
+            return []
+        items = self.list_assignments(status="published", limit=limit)
+        out: list[dict[str, Any]] = []
+        for a in items:
+            if not a["target_student_names"] or any(_names_match(n, sn) for n in a["target_student_names"]):
+                row = {**a}
+                if not row.get("send_answer_to_parent"):
+                    row["answer_key"] = ""
+                    row["answer_key_image"] = ""
+                out.append(strip_assignment_answers_for_viewer(row))
+        return out
 
     def _assignment_row(self, row: sqlite3.Row) -> dict[str, Any]:
         try:
             names = json.loads(row["target_student_names_json"] or "[]")
         except json.JSONDecodeError:
             names = []
+        keys = row.keys()
+        try:
+            formats = json.loads(row["allowed_formats_json"] or "[]") if "allowed_formats_json" in keys else []
+        except json.JSONDecodeError:
+            formats = []
+        if not formats:
+            formats = ["jpg", "jpeg", "png", "webp"]
         return {
             "id": row["id"],
             "teacher_sub": row["teacher_sub"],
@@ -253,6 +648,22 @@ class WorkspaceStore:
             "due_at": row["due_at"],
             "status": row["status"],
             "target_student_names": names if isinstance(names, list) else [],
+            "answer_key": row["answer_key"] if "answer_key" in keys else "",
+            "answer_key_image": row["answer_key_image"] if "answer_key_image" in keys else "",
+            "send_answer_to_parent": bool(row["send_answer_to_parent"]) if "send_answer_to_parent" in keys else False,
+            "allow_late_submit": bool(row["allow_late_submit"]) if "allow_late_submit" in keys else False,
+            "max_submissions": int(row["max_submissions"]) if "max_submissions" in keys else 0,
+            "allowed_formats": formats if isinstance(formats, list) else ["jpg", "jpeg", "png", "webp"],
+            "scoring_rubric": row["scoring_rubric"] if "scoring_rubric" in keys else "",
+            "teacher_attachment_note": row["teacher_attachment_note"] if "teacher_attachment_note" in keys else "",
+            "teacher_attachment_image": row["teacher_attachment_image"] if "teacher_attachment_image" in keys else "",
+            "notify_student_parent": bool(row["notify_student_parent"]) if "notify_student_parent" in keys else True,
+            "scheduled_publish_at": row["scheduled_publish_at"] if "scheduled_publish_at" in keys else "",
+            "submission_mode": row["submission_mode"] if "submission_mode" in keys else "both",
+            "hide_answer_from_student": bool(row["hide_answer_from_student"])
+            if "hide_answer_from_student" in keys
+            else False,
+            "answer_released_at": row["answer_released_at"] if "answer_released_at" in keys else "",
             "created_at": row["created_at"],
             "published_at": row["published_at"],
         }
@@ -339,6 +750,7 @@ class WorkspaceStore:
         *,
         graded_by: str = "ai",
         published: bool = False,
+        submission_status: str | None = None,
     ) -> dict[str, Any]:
         now = _now_iso()
         with _lock:
@@ -383,7 +795,9 @@ class WorkspaceStore:
                             now,
                         ),
                     )
-                sub_status = "published" if published else "graded"
+                sub_status = "published" if published else (submission_status or "graded")
+                if sub_status not in SUBMISSION_STATUSES:
+                    sub_status = "graded"
                 pub_at = now if published else None
                 if published:
                     conn.execute(
@@ -396,7 +810,7 @@ class WorkspaceStore:
                 else:
                     conn.execute(
                         "UPDATE submissions SET status = ?, updated_at = ? WHERE id = ?",
-                        ("graded", now, submission_id),
+                        (sub_status, now, submission_id),
                     )
         rec = self.get_grading_record_by_submission(submission_id)
         return rec or {}
@@ -447,6 +861,7 @@ class WorkspaceStore:
         teacher_sub: str | None = None,
         student_name: str | None = None,
         assignment_id: str | None = None,
+        status: str | None = None,
         published_only: bool = False,
         limit: int = 100,
     ) -> list[dict[str, Any]]:
@@ -461,6 +876,9 @@ class WorkspaceStore:
         if assignment_id:
             clauses.append("assignment_id = ?")
             params.append(assignment_id)
+        if status:
+            clauses.append("status = ?")
+            params.append(status)
         if published_only:
             clauses.append("status IN ('published', 'correction_pending', 'correction_done', 'closed')")
         where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
@@ -517,7 +935,7 @@ class WorkspaceStore:
         variants = self.list_variant_tasks(student_name=sub["student_name"], submission_id=sub["id"])
         out = {**sub, "grading_record": gr, "assignment": assignment, "variant_tasks": variants}
         if gr and gr.get("result"):
-            sp = gr["result"].get("score_pct")
+            sp = score_percent_from_result(gr["result"])
             if sp is not None:
                 out["score_percent"] = sp
         return out
@@ -739,11 +1157,16 @@ class WorkspaceStore:
                     """
                     SELECT COUNT(*) FROM submissions
                     WHERE (teacher_sub = ? OR teacher_sub = '' OR submitted_by_role IN ('parent', 'student'))
-                    AND status = 'graded'
+                    AND status = 'pending_review'
                     """,
                     (teacher_sub,),
                 ).fetchone()[0]
-        return {"corrections_pending": int(corrections), "unpublished_graded": int(unpublished)}
+        pending = int(unpublished)
+        return {
+            "corrections_pending": int(corrections),
+            "pending_review": pending,
+            "unpublished_graded": pending,
+        }
 
     def assignment_submission_stats(self, assignment_id: str) -> dict[str, Any]:
         with _lock:
@@ -759,3 +1182,258 @@ class WorkspaceStore:
                     (assignment_id,),
                 ).fetchone()[0]
         return {"submission_count": int(total), "published_count": int(published)}
+
+    def find_submission_for_student(self, assignment_id: str, student_name: str) -> dict[str, Any] | None:
+        sn = _norm_student_name(student_name).casefold()
+        if not sn:
+            return None
+        with _lock:
+            with self._connect() as conn:
+                row = conn.execute(
+                    """
+                    SELECT * FROM submissions
+                    WHERE assignment_id = ? AND LOWER(TRIM(student_name)) = ?
+                    ORDER BY updated_at DESC LIMIT 1
+                    """,
+                    (assignment_id, sn),
+                ).fetchone()
+        return self._submission_row(row) if row else None
+
+    def count_submission_versions(self, submission_id: str) -> int:
+        with _lock:
+            with self._connect() as conn:
+                n = conn.execute(
+                    "SELECT COUNT(*) FROM submission_versions WHERE submission_id = ?",
+                    (submission_id,),
+                ).fetchone()[0]
+        return int(n)
+
+    def _archive_submission_version(self, conn: sqlite3.Connection, sub_row: sqlite3.Row | dict[str, Any]) -> None:
+        sid = sub_row["id"] if isinstance(sub_row, sqlite3.Row) else sub_row.get("id")
+        ver = conn.execute(
+            "SELECT COUNT(*) FROM submission_versions WHERE submission_id = ?", (sid,)
+        ).fetchone()[0] + 1
+        conn.execute(
+            """
+            INSERT INTO submission_versions (
+                id, submission_id, version, file_name, image_filename, image_url, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                uuid.uuid4().hex,
+                sid,
+                ver,
+                sub_row["file_name"],
+                sub_row["image_filename"],
+                sub_row["image_url"],
+                _now_iso(),
+            ),
+        )
+
+    def resubmit_submission(
+        self,
+        submission_id: str,
+        *,
+        file_name: str,
+        image_filename: str,
+        image_url: str,
+        status: str = "grading",
+    ) -> dict[str, Any]:
+        now = _now_iso()
+        with _lock:
+            with self._connect() as conn:
+                row = conn.execute("SELECT * FROM submissions WHERE id = ?", (submission_id,)).fetchone()
+                if not row:
+                    raise ValueError("未找到该提交")
+                self._archive_submission_version(conn, row)
+                conn.execute(
+                    """
+                    UPDATE submissions SET
+                        file_name = ?, image_filename = ?, image_url = ?,
+                        status = ?, updated_at = ?, published_at = '',
+                        correction_note = '', correction_review_status = ''
+                    WHERE id = ?
+                    """,
+                    (
+                        clip_text(file_name, 240),
+                        clip_text(image_filename, 240),
+                        clip_text(image_url, 500),
+                        status,
+                        now,
+                        submission_id,
+                    ),
+                )
+        return self.get_submission(submission_id) or {}
+
+    def student_assignment_in_todo(
+        self, assignment: dict[str, Any], submission: dict[str, Any] | None
+    ) -> bool:
+        """学生待办：未交、退回订正、或截止前可重交。"""
+        if not allows_student_submit(assignment):
+            return False
+        if not submission:
+            return True
+        if submission.get("status") == "correction_pending":
+            return student_may_submit_assignment(assignment)
+        if not student_may_submit_assignment(assignment):
+            return False
+        return submission.get("status") in {
+            "submitted",
+            "grading",
+            "graded",
+            "pending_review",
+        }
+
+    def may_resubmit(
+        self, assignment: dict[str, Any], submission: dict[str, Any] | None
+    ) -> tuple[bool, str]:
+        if not submission:
+            return True, ""
+        if not student_may_submit_assignment(assignment):
+            return False, "已超过截止时间"
+        if submission.get("status") == "correction_pending":
+            return True, ""
+        max_sub = int(assignment.get("max_submissions") or 0)
+        if max_sub > 0:
+            used = self.count_submission_versions(submission["id"]) + 1
+            if used >= max_sub:
+                return False, f"已达最大提交次数（{max_sub} 次）"
+        if submission.get("status") in {"published", "closed", "correction_done"}:
+            return False, "当前状态不可重交"
+        return True, ""
+
+    def return_submission_for_correction(
+        self, submission_id: str, teacher_sub: str, note: str = ""
+    ) -> dict[str, Any]:
+        sub = self.get_submission(submission_id)
+        if not sub:
+            raise ValueError("未找到该提交")
+        if sub["teacher_sub"] and sub["teacher_sub"] != teacher_sub:
+            raise ValueError("无权操作")
+        if sub["status"] not in {"pending_review", "graded", "published"}:
+            raise ValueError("当前状态不可退回订正")
+        now = _now_iso()
+        with _lock:
+            with self._connect() as conn:
+                conn.execute(
+                    """
+                    UPDATE submissions SET status = 'correction_pending', correction_note = ?,
+                    correction_review_status = '', updated_at = ?, published_at = ''
+                    WHERE id = ?
+                    """,
+                    (clip_text(note, 2000), now, submission_id),
+                )
+                conn.execute(
+                    "UPDATE grading_records SET published = 0, updated_at = ? WHERE submission_id = ?",
+                    (now, submission_id),
+                )
+        return self.get_submission(submission_id) or {}
+
+    def _submission_status_label(self, status: str | None, *, published_grading: bool) -> str:
+        st = (status or "").strip()
+        if st == "published":
+            return "已下发学生"
+        if st == "pending_review":
+            return "待审阅"
+        if st == "graded":
+            return "已批改待下发"
+        if st == "correction_pending":
+            return "待订正"
+        if st == "correction_done":
+            return "订正待验收"
+        if st == "closed":
+            return "已完成"
+        if published_grading:
+            return "已批改"
+        return st or "—"
+
+    def assignment_pdca_report(self, assignment_id: str) -> dict[str, Any]:
+        assignment = self.get_assignment(assignment_id)
+        if not assignment:
+            raise ValueError("未找到任务")
+        targets = [_norm_student_name(n) for n in (assignment.get("target_student_names") or []) if _norm_student_name(n)]
+        subs = self.list_submissions(assignment_id=assignment_id, limit=500)
+        submitted_names: set[str] = set()
+        submitted_rows: list[dict[str, Any]] = []
+        scores: list[float] = []
+        weak_counter: dict[str, int] = {}
+        pending_review = 0
+        unpublished_graded = 0
+        for s in subs:
+            sn = _norm_student_name(s.get("student_name"))
+            if not sn:
+                continue
+            key = sn.casefold()
+            if key in submitted_names:
+                continue
+            submitted_names.add(key)
+            gr = s.get("grading_record")
+            result = gr.get("result") if gr else None
+            score = s.get("score_percent")
+            if score is None and isinstance(result, dict):
+                score = score_percent_from_result(result)
+            published_grading = bool(gr and gr.get("published"))
+            st = s.get("status")
+            if st == "pending_review":
+                pending_review += 1
+            elif st == "graded" or (gr and not published_grading):
+                unpublished_graded += 1
+            if score is not None:
+                scores.append(float(score))
+            weak: list[str] = []
+            if isinstance(result, dict):
+                raw_weak = result.get("weak_points")
+                if isinstance(raw_weak, list):
+                    weak = [str(x).strip() for x in raw_weak if str(x).strip()][:5]
+                for w in weak:
+                    weak_counter[w] = weak_counter.get(w, 0) + 1
+            comments = ""
+            if isinstance(result, dict):
+                comments = str(result.get("comments") or result.get("personal_comment") or "").strip()
+            submitted_rows.append(
+                {
+                    "student_name": sn,
+                    "status": st,
+                    "status_label": self._submission_status_label(st, published_grading=published_grading),
+                    "score_percent": score,
+                    "submitted_at": s.get("created_at"),
+                    "updated_at": s.get("updated_at"),
+                    "version_count": self.count_submission_versions(s["id"]) + 1,
+                    "submission_id": s.get("id"),
+                    "weak_points": weak,
+                    "comment_preview": comments[:120] if comments else "",
+                    "published_to_student": st in {"published", "correction_pending", "correction_done", "closed"},
+                }
+            )
+        not_submitted = [n for n in targets if n.casefold() not in submitted_names]
+        target_count = len(targets)
+        rate = round(len(submitted_rows) / target_count * 100, 1) if target_count else 0.0
+        avg = round(sum(scores) / len(scores), 1) if scores else None
+        distribution = {"90-100": 0, "80-89": 0, "60-79": 0, "0-59": 0, "未评分": 0}
+        for sc in scores:
+            if sc >= 90:
+                distribution["90-100"] += 1
+            elif sc >= 80:
+                distribution["80-89"] += 1
+            elif sc >= 60:
+                distribution["60-79"] += 1
+            else:
+                distribution["0-59"] += 1
+        if len(scores) < len(submitted_rows):
+            distribution["未评分"] = len(submitted_rows) - len(scores)
+        weak_ranked = sorted(weak_counter.items(), key=lambda x: (-x[1], x[0]))[:8]
+        released = bool(str(assignment.get("answer_released_at") or "").strip())
+        return {
+            "assignment": enrich_assignment_deadline(assignment),
+            "target_count": target_count,
+            "submitted": submitted_rows,
+            "not_submitted": not_submitted,
+            "submission_rate": rate,
+            "avg_score": avg,
+            "notify_sent": bool(assignment.get("notify_student_parent")),
+            "pending_review_count": pending_review,
+            "unpublished_graded_count": unpublished_graded,
+            "score_distribution": distribution,
+            "weak_knowledge_ranked": [{"name": k, "count": v} for k, v in weak_ranked],
+            "answer_released": released,
+        }

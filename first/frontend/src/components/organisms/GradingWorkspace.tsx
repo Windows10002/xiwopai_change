@@ -33,7 +33,7 @@ import {
 import { GradingHistorySidePanel } from "@/components/molecules/GradingHistorySidePanel";
 import { clearGradingLiveDraft, loadGradingLiveDraft, saveGradingLiveDraft } from "@/lib/gradingSession";
 import { deleteHistoryImageBlob, getHistoryImageBlob, putHistoryImageBlob } from "@/lib/gradingHistoryImageDb";
-import { fileToJpegBlobForStorage, fileToJpegThumbDataUrl } from "@/lib/imageThumb";
+import { fileToJpegBlobForStorage } from "@/lib/imageThumb";
 import { GlassOpacityControl } from "@/components/molecules/GlassOpacityControl";
 import type { BatchInsightsResponse } from "@/lib/gradingBatchInsights";
 import { saveUserPreferences } from "@/lib/userPreferences";
@@ -181,60 +181,95 @@ export function GradingWorkspace({
     return id;
   }, []);
 
-  /** 同一会话内刷新：恢复最近一次成功批改的结果与预览（优先 IndexedDB 原图） */
+  /** 同一会话内刷新：恢复最近一次成功批改的结果与预览（优先 IndexedDB 原图，多图批次一并恢复） */
   useEffect(() => {
     let cancelled = false;
     void (async () => {
       const d = loadGradingLiveDraft(subject);
       if (!d?.detail) return;
-      setResult(d.detail);
-      setInsightFileName(d.fileName?.trim() ?? "");
-      setCachedBatchInsights(null);
-      const s = d.step;
-      setStep(s >= 1 && s <= 3 ? s : 3);
 
-      let nextPreview: string | null = null;
-      if (d.historyEntryId) {
-        for (let attempt = 0; attempt < 6 && !nextPreview; attempt += 1) {
+      const loadBlobPreview = async (historyEntryId: string): Promise<string | null> => {
+        for (let attempt = 0; attempt < 6; attempt += 1) {
           if (attempt > 0) await new Promise((r) => setTimeout(r, 150));
           try {
-            const blob = await getHistoryImageBlob(d.historyEntryId);
-            if (blob) {
-              const u = URL.createObjectURL(blob);
-              if (cancelled) {
-                URL.revokeObjectURL(u);
-              } else {
-                nextPreview = u;
-              }
-            }
+            const blob = await getHistoryImageBlob(historyEntryId);
+            if (blob) return URL.createObjectURL(blob);
           } catch {
             /* ignore */
           }
-          if (cancelled) break;
         }
-      }
-      if (!nextPreview && d.imageUrl) {
-        nextPreview = d.imageUrl;
-      }
-      if (!cancelled && nextPreview) {
-        setPreviewUrl(nextPreview);
-        previewUrlRef.current = nextPreview;
-      }
+        return null;
+      };
 
-      if (!cancelled) {
-        if (d.imageUrl && String(d.imageUrl).includes("/uploads/")) {
-          setServerImageUrlByIndex({ 0: d.imageUrl });
-        } else {
-          setServerImageUrlByIndex({});
+      if (d.batchItems?.length) {
+        const items = d.batchItems;
+        const results: Array<GradingResultDetail | null> = items.map((it) => it.detail);
+        const idMap: Record<number, string> = {};
+        const urlMap: Record<number, string> = {};
+        const serverMap: Record<number, string> = {};
+        for (let i = 0; i < items.length; i += 1) {
+          idMap[i] = items[i]!.historyEntryId;
+          if (items[i]!.imageUrl) serverMap[i] = items[i]!.imageUrl!;
         }
+        setBatchResults(results);
+        setBatchErrors(Array.from({ length: items.length }, () => null));
+        setSelectedFiles([]);
+        setGradingProgress({ done: items.length, total: items.length });
+        historyIdByIndexRef.current = { ...idMap };
+        setHistoryEntryIdByIndex(idMap);
+        setServerImageUrlByIndex(serverMap);
+
+        for (let i = 0; i < items.length; i += 1) {
+          const prev = await loadBlobPreview(items[i]!.historyEntryId);
+          if (cancelled) {
+            if (prev) URL.revokeObjectURL(prev);
+            return;
+          }
+          if (prev) urlMap[i] = prev;
+        }
+        if (!cancelled) setServerImageUrlByIndex((m) => ({ ...m, ...urlMap }));
+
+        const cur = Math.min(Math.max(0, d.currentIndex ?? 0), items.length - 1);
+        setCurrentFileIndex(cur);
+        setResult(items[cur]!.detail);
+        setInsightFileName(items[cur]!.fileName);
+        const pv = urlMap[cur] ?? serverMap[cur] ?? null;
+        if (pv && !cancelled) {
+          setPreviewUrl(pv);
+          previewUrlRef.current = pv;
+        }
+        setStep(3);
+      } else {
+        setResult(d.detail);
+        setInsightFileName(d.fileName?.trim() ?? "");
+        const s = d.step;
+        setStep(s >= 1 && s <= 3 ? s : 3);
+
+        let nextPreview: string | null = null;
         if (d.historyEntryId) {
-          setHistoryEntryIdByIndex({ 0: d.historyEntryId });
-        } else {
-          setHistoryEntryIdByIndex({});
+          nextPreview = await loadBlobPreview(d.historyEntryId);
+        }
+        if (!nextPreview && d.imageUrl) nextPreview = d.imageUrl;
+        if (!cancelled && nextPreview) {
+          setPreviewUrl(nextPreview);
+          previewUrlRef.current = nextPreview;
+        }
+        if (!cancelled) {
+          if (d.imageUrl && String(d.imageUrl).includes("/uploads/")) {
+            setServerImageUrlByIndex({ 0: d.imageUrl });
+          } else {
+            setServerImageUrlByIndex({});
+          }
+          if (d.historyEntryId) {
+            setHistoryEntryIdByIndex({ 0: d.historyEntryId });
+            historyIdByIndexRef.current = { 0: d.historyEntryId };
+          }
         }
       }
 
-      setUploadStatus({ phase: "info", message: "已恢复离开前的批改页面（刷新后仍保留）。" });
+      if (cancelled) return;
+      setCachedBatchInsights(null);
+      setUploadStatus({ phase: "info", message: "已恢复离开前的批改页面（含多张试卷图）。" });
       schedule(() => setUploadStatus({ phase: "idle" }), 4200);
     })();
     return () => {
@@ -489,7 +524,6 @@ export function GradingWorkspace({
             setServerImageUrlByIndex((prev) => ({ ...prev, [index]: imageUrl }));
           }
           try {
-            const thumb = await fileToJpegThumbDataUrl(file);
             const rec = saveGradingHistoryEntry({
               subject,
               fileName: file.name,
@@ -503,7 +537,6 @@ export function GradingWorkspace({
                 ? { assignmentTitle: linkedAssignmentRef.current.title }
                 : {}),
               ...(teacherGradeLevel.trim() ? { gradeLevel: teacherGradeLevel.trim() } : {}),
-              ...(thumb ? { thumbDataUrl: thumb } : {}),
               ...(folderGroupKey
                 ? {
                     groupKey: folderGroupKey,
@@ -562,6 +595,19 @@ export function GradingWorkspace({
       }
       setStep(3);
       const idx = firstResultIndex;
+      const batchItems = files
+        .map((file, i) => {
+          const detail = nextResults[i];
+          const hid = historyIdByIndexRef.current[i];
+          if (!detail || !hid) return null;
+          return {
+            historyEntryId: hid,
+            fileName: file.name,
+            detail,
+            imageUrl: serverPreviewByIndexRef.current[i],
+          };
+        })
+        .filter((x): x is NonNullable<typeof x> => Boolean(x));
       saveGradingLiveDraft(subject, {
         imageUrl: serverPreviewByIndexRef.current[idx] ?? "",
         historyEntryId: historyIdByIndexRef.current[idx],
@@ -569,7 +615,28 @@ export function GradingWorkspace({
         step: 3,
         fileName: files[idx]?.name ?? "",
         savedAt: Date.now(),
+        ...(files.length > 1 && batchItems.length
+          ? {
+              batchItems,
+              currentIndex: idx,
+              groupKey: folderGroupKey,
+              groupName: batchFolderLabel,
+            }
+          : {}),
       });
+      if (files.length > 1) {
+        const idMap: Record<number, string> = {};
+        const resultMap: Record<number, GradingResultDetail | null> = {};
+        const urlMap: Record<number, string> = {};
+        files.forEach((_, i) => {
+          if (historyIdByIndexRef.current[i]) idMap[i] = historyIdByIndexRef.current[i]!;
+          resultMap[i] = nextResults[i];
+          if (serverPreviewByIndexRef.current[i]) urlMap[i] = serverPreviewByIndexRef.current[i]!;
+        });
+        setHistoryEntryIdByIndex(idMap);
+        setBatchResults(files.map((_, i) => nextResults[i] ?? null));
+        setServerImageUrlByIndex(urlMap);
+      }
       setUploadStatus({
         phase: "success",
         message:
@@ -602,19 +669,47 @@ export function GradingWorkspace({
 
   const selectPreviewFile = useCallback(
     (index: number) => {
+      if (isGrading) return;
       const file = selectedFiles[index];
-      if (!file || isGrading) return;
       if (previewUrlRef.current?.startsWith("blob:")) safeReleaseObjectUrl(previewUrlRef.current);
-      pendingFileRef.current = file;
       setCurrentFileIndex(index);
-      const url = URL.createObjectURL(file);
-      previewUrlRef.current = url;
-      setPreviewUrl(url);
       setResult(batchResults[index] ?? null);
       setStep(batchResults[index] ? 3 : 1);
       setUploadStatus(batchErrors[index] ? { phase: "error", message: batchErrors[index]! } : { phase: "idle" });
+
+      if (file) {
+        pendingFileRef.current = file;
+        const url = URL.createObjectURL(file);
+        previewUrlRef.current = url;
+        setPreviewUrl(url);
+        return;
+      }
+
+      pendingFileRef.current = null;
+      const histId = historyEntryIdByIndex[index] ?? historyIdByIndexRef.current[index];
+      void (async () => {
+        if (histId) {
+          try {
+            const blob = await getHistoryImageBlob(histId);
+            if (blob) {
+              const u = URL.createObjectURL(blob);
+              if (previewUrlRef.current?.startsWith("blob:")) safeReleaseObjectUrl(previewUrlRef.current);
+              previewUrlRef.current = u;
+              setPreviewUrl(u);
+              return;
+            }
+          } catch {
+            /* ignore */
+          }
+        }
+        const server = serverImageUrlByIndex[index];
+        if (server) {
+          previewUrlRef.current = server;
+          setPreviewUrl(server);
+        }
+      })();
     },
-    [batchErrors, batchResults, isGrading, selectedFiles]
+    [batchErrors, batchResults, historyEntryIdByIndex, isGrading, selectedFiles, serverImageUrlByIndex]
   );
 
   const applyHistoryEntry = useCallback(

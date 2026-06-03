@@ -21,7 +21,7 @@ WORKSPACE_DB = BASE_DIR / "workspace.db"
 
 ALLOWED_UPLOAD_EXT = {".jpg", ".jpeg", ".png", ".webp", ".bmp", ".gif"}
 MAX_UPLOAD_BYTES = int(os.getenv("MAX_UPLOAD_BYTES", str(15 * 1024 * 1024)))
-GRADE_SUBJECTS = frozenset({"math", "english"})
+GRADE_SUBJECTS = frozenset({"math", "english", "chinese"})
 
 SECRET_KEY = os.getenv("SECRET_KEY", "dev-change-me-in-production")
 TOKEN_MAX_AGE_SECONDS = int(os.getenv("TOKEN_MAX_AGE_SECONDS", str(7 * 24 * 3600)))

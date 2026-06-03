@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
-import { Link, useLocation, useNavigate } from "react-router-dom";
+import { useLocation } from "react-router-dom";
+import { AppLink } from "@/components/atoms/AppLink";
+import { useAppNavigate } from "@/hooks/useAppNavigate";
 import { CheckCircle2, Eye, EyeOff, Loader2, Lock, UserRound } from "lucide-react";
 import { CUTE_ICON } from "@/components/atoms/cuteIcon";
 import { IpMascotWaveWelcome } from "@/components/atoms/IpMascot";
@@ -11,6 +13,8 @@ import {
   studentNeedsGuardianApproval,
 } from "@/lib/appSession";
 import { DemoAccountsPopover } from "@/components/molecules/DemoAccountsPopover";
+import { DevParallelLoginLinks } from "@/components/molecules/DevParallelLoginLinks";
+import { authSlotLabel, getAuthSlot } from "@/lib/authSlot";
 import { findDemoAccount } from "@/lib/demoAccounts";
 import { saveStudentProfileName } from "@/lib/studentProfileName";
 
@@ -60,7 +64,7 @@ function BrandLogoRow() {
 }
 
 export function LoginPage() {
-  const navigate = useNavigate();
+  const navigate = useAppNavigate();
   const location = useLocation();
   const [account, setAccount] = useState("");
   const [password, setPassword] = useState("");
@@ -175,12 +179,12 @@ export function LoginPage() {
 
   return (
     <div className="page-bg-mint-warm relative flex min-h-screen flex-col">
-      <Link
+      <AppLink
         to="/"
         className="absolute right-4 top-4 z-20 rounded-full bg-white/85 px-4 py-2 text-caption font-semibold text-ink-navActive shadow-sm ring-1 ring-primary/15 backdrop-blur-sm transition-all duration-button ease-smooth hover:bg-white hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-mint/50 focus-visible:ring-offset-2 md:right-8 md:top-6"
       >
         返回首页
-      </Link>
+      </AppLink>
 
       <div className="relative z-10 mx-auto flex w-full max-w-6xl flex-1 flex-col lg:flex-row lg:items-stretch">
         {/* 左侧品牌区：IP 挥手 → Logo → Slogan */}
@@ -230,6 +234,12 @@ export function LoginPage() {
               密码统一为 <span className="font-mono font-semibold text-ink-navActive">{DEMO_PASSWORD}</span>
               ，点击标题旁表格图标查看各端演示账号
             </p>
+            <DevParallelLoginLinks />
+            {getAuthSlot() !== "main" ? (
+              <p className="mt-3 text-center text-[0.65rem] font-medium text-ink-muted">
+                当前标签登录槽：<span className="font-bold text-brand">{authSlotLabel()}</span>
+              </p>
+            ) : null}
             {backendStale ? (
               <p
                 className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-center text-caption leading-relaxed text-amber-950"
@@ -461,16 +471,16 @@ export function LoginPage() {
                     />
                     <span className="font-medium text-ink">记住我</span>
                   </label>
-                  <Link
+                  <AppLink
                     to="/login"
                     state={{ focus: "forgot" }}
                     className="shrink-0 font-semibold text-brand underline-offset-2 transition-colors duration-button hover:text-brand-hover hover:underline focus-visible:rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-mint/45 focus-visible:ring-offset-2"
-                    onClick={(ev) => {
+                    onClick={(ev: React.MouseEvent) => {
                       ev.preventDefault();
                     }}
                   >
                     忘记密码？
-                  </Link>
+                  </AppLink>
                 </div>
 
                 <button
@@ -490,13 +500,13 @@ export function LoginPage() {
 
                 <p className="pt-1 text-center text-small text-ink-muted">
                   还没有账号？{" "}
-                  <Link
+                  <AppLink
                     to="/login"
                     className="font-bold text-brand underline-offset-2 transition-colors duration-button hover:text-brand-hover hover:underline focus-visible:rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-mint/45 focus-visible:ring-offset-2"
-                    onClick={(ev) => ev.preventDefault()}
+                    onClick={(ev: React.MouseEvent) => ev.preventDefault()}
                   >
                     立即注册
-                  </Link>
+                  </AppLink>
                 </p>
               </form>
             )}
@@ -511,23 +521,23 @@ export function LoginPage() {
             |
           </span>
           <span className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1">
-            <Link
+            <AppLink
               to="/login"
               className="font-medium text-brand underline-offset-2 hover:underline focus-visible:rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-mint/45 focus-visible:ring-offset-2"
-              onClick={(e) => e.preventDefault()}
+              onClick={(e: React.MouseEvent) => e.preventDefault()}
             >
               隐私政策
-            </Link>
+            </AppLink>
             <span className="text-ink-subtle" aria-hidden>
               |
             </span>
-            <Link
+            <AppLink
               to="/login"
               className="font-medium text-brand underline-offset-2 hover:underline focus-visible:rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-mint/45 focus-visible:ring-offset-2"
-              onClick={(e) => e.preventDefault()}
+              onClick={(e: React.MouseEvent) => e.preventDefault()}
             >
               用户协议
-            </Link>
+            </AppLink>
           </span>
         </div>
       </footer>

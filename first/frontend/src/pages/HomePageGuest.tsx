@@ -52,11 +52,11 @@ export function HomePageGuest() {
                 />
                 <SubjectCard
                   emphasis
-                  title="英语作文"
+                  title="英语作业"
                   description="内容 · 语言 · 结构"
                   to="/english"
                   theme="english"
-                  badge="作文"
+                  badge="外语"
                 />
               </div>
             </section>

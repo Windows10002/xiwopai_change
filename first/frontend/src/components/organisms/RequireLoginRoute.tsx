@@ -1,5 +1,7 @@
 import type { ReactNode } from "react";
-import { Link, useLocation } from "react-router-dom";
+import { useLocation } from "react-router-dom";
+import { AppLink } from "@/components/atoms/AppLink";
+import { loginPath } from "@/lib/authSlot";
 
 import { isAppLoggedIn } from "@/lib/appSession";
 
@@ -19,12 +21,12 @@ export function RequireLoginRoute({ children, loginRedirect }: RequireLoginRoute
         <div className="w-full max-w-md rounded-[1.25rem] border border-black/[0.08] bg-white/95 p-8 text-center shadow-card">
           <p className="text-body font-bold text-ink">请先登录</p>
           <p className="mt-2 text-small text-ink-muted">该功能需要登录后访问。</p>
-          <Link
-            to={`/login?redirect=${encodeURIComponent(redirect)}`}
+          <AppLink
+            to={loginPath(redirect)}
             className="btn-accent-mint-solid mt-6 inline-flex min-h-11 w-full items-center justify-center rounded-xl text-small font-bold"
           >
             去登录
-          </Link>
+          </AppLink>
         </div>
       </div>
     );

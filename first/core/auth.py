@@ -12,7 +12,7 @@ from core.config import GRADING_MIN_GRADE, GUARDIAN_DEMO_PASSPHRASE, SECRET_KEY,
 VALID_ROLES = frozenset({"parent", "student", "teacher", "admin"})
 
 ROLE_PERMISSIONS: dict[str, frozenset[str]] = {
-    "parent": frozenset({"grading.access"}),
+    "parent": frozenset({"grading.access", "workspace.view_child"}),
     "student": frozenset({"grading.access", "disputes.submit", "workspace.view_own", "workspace.submit"}),
     "teacher": frozenset(
         {
@@ -83,16 +83,41 @@ def current_user() -> dict[str, Any] | None:
     return getattr(g, "current_user", None)
 
 
+def decode_student_name_header(raw: str | None) -> str:
+    """解析 X-Student-Name（前端对中文做 URI 编码）。"""
+    text = (raw or "").strip()
+    if not text:
+        return ""
+    try:
+        from urllib.parse import unquote
+
+        decoded = unquote(text, encoding="utf-8", errors="replace")
+        return decoded.strip()[:80]
+    except Exception:
+        return text[:80]
+
+
 def resolve_student_profile_name(user: dict[str, Any] | None, header_value: str | None = None) -> str:
-    """演示环境：学生姓名来自请求头或令牌字段，用于师生数据匹配。"""
+    """演示环境：学生姓名来自查询参数、请求头或令牌，用于师生任务匹配。"""
     if not user:
         return ""
     from flask import request
 
-    hdr = (header_value or request.headers.get("X-Student-Name") or "").strip()
+    q = (request.args.get("student_name") or "").strip()
+    if q:
+        return decode_student_name_header(q)[:80] or q[:80]
+
+    hdr = decode_student_name_header(header_value or request.headers.get("X-Student-Name") or "")
     if hdr:
-        return hdr[:80]
-    return str(user.get("student_name") or "").strip()[:80]
+        return hdr
+
+    role = str(user.get("role") or "")
+    if role == "student":
+        for key in ("student_name", "display_name"):
+            v = str(user.get(key) or "").strip()
+            if v:
+                return v[:80]
+    return str(user.get("student_name") or user.get("display_name") or "").strip()[:80]
 
 
 def require_auth(*, optional: bool = False):

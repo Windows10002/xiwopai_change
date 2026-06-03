@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Calendar, FolderOpen, Pencil, Tag, Type } from "lucide-react";
 
 import { CUTE_ICON } from "@/components/atoms/cuteIcon";
+import { HistoryEntryThumb } from "@/components/atoms/HistoryEntryThumb";
 import { AppDialog, APP_DIALOG_PANEL } from "@/components/molecules/AppDialog";
 import {
   buildGroupedHistoryRows,
@@ -236,17 +237,11 @@ function SingleHistoryCard({
   return (
     <li className="rounded-2xl border border-black/[0.06] bg-primary-tint/30 p-3 shadow-sm">
       <div className="flex gap-3">
-        {entry.thumbDataUrl ? (
-          <img
-            src={entry.thumbDataUrl}
-            alt=""
-            className="h-14 w-14 shrink-0 rounded-lg border border-black/[0.06] object-cover shadow-sm"
-          />
-        ) : (
-          <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-lg border border-dashed border-black/[0.1] bg-white/80 text-[0.65rem] font-semibold text-ink-muted">
-            无缩略
-          </div>
-        )}
+        <HistoryEntryThumb
+          entryId={entry.id}
+          legacyThumbDataUrl={entry.thumbDataUrl}
+          className="h-14 w-14 shrink-0 rounded-lg border border-black/[0.06] object-cover shadow-sm"
+        />
         <div className="min-w-0 flex-1">
           <div className="flex items-start justify-between gap-2">
             <p className="min-w-0 flex-1 truncate text-small font-bold text-ink">{title}</p>
@@ -331,13 +326,7 @@ function GroupHistoryCard({
         {row.items.map((h) => (
           <li key={h.id} className="rounded-xl bg-white/80 ring-1 ring-black/[0.05]">
             <div className="flex items-center gap-2 px-2 py-2">
-              {h.thumbDataUrl ? (
-                <img src={h.thumbDataUrl} alt="" className="h-9 w-9 shrink-0 rounded-md object-cover" />
-              ) : (
-                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-surface-page text-[0.55rem] text-ink-muted">
-                  无图
-                </div>
-              )}
+              <HistoryEntryThumb entryId={h.id} legacyThumbDataUrl={h.thumbDataUrl} />
               <span className="min-w-0 flex-1 truncate text-caption font-semibold text-ink">{historyEntryTitle(h)}</span>
               <span className="shrink-0 text-[0.65rem] font-bold text-[#006D41]">{h.detail.scorePercent}%</span>
               <button

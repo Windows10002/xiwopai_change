@@ -2,6 +2,7 @@ import { lazy, Suspense, useEffect } from "react";
 import { Routes, Route } from "react-router-dom";
 import { HomePage } from "@/pages/HomePage";
 import { EnglishGradingPage } from "@/pages/EnglishGradingPage";
+import { ChineseGradingPage } from "@/pages/ChineseGradingPage";
 import { MathGradingPage } from "@/pages/MathGradingPage";
 import { LoginPage } from "@/pages/LoginPage";
 import { ProtectedRoleRoute } from "@/components/organisms/ProtectedRoleRoute";
@@ -52,6 +53,7 @@ export default function App() {
       <Routes>
         <Route path="/" element={<HomePage />} />
         <Route path="/english" element={<EnglishGradingPage />} />
+        <Route path="/chinese" element={<ChineseGradingPage />} />
         <Route path="/math" element={<MathGradingPage />} />
         <Route path="/login" element={<LoginPage />} />
         <Route
