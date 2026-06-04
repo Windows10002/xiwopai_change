@@ -1,15 +1,21 @@
-import { useState } from "react";
-import { Link } from "react-router-dom";
-import { BookMarked, ClipboardList, Sparkles } from "lucide-react";
-import { useUserPreferences } from "@/hooks/useUserPreferences";
+import { Sparkles } from "lucide-react";
+
+import { AppLink } from "@/components/atoms/AppLink";
 import { Navbar } from "@/components/atoms/Navbar";
-import { FabHelp } from "@/components/atoms/FabHelp";
+import { PiAssistantFab } from "@/components/atoms/PiAssistantFab";
 import { SubjectCard } from "@/components/molecules/SubjectCard";
+import { StudentHomeEntry } from "@/components/molecules/StudentHomeEntry";
+import { StudentHomeHub } from "@/components/molecules/StudentHomeHub";
 import { IpBrandFace } from "@/components/atoms/IpMascot";
-import { AiHelpModal } from "@/components/organisms/AiHelpModal";
 import { PageCampusDeco } from "@/components/atoms/PageCampusDeco";
 import { CUTE_ICON } from "@/components/atoms/cuteIcon";
-import { countWrongBookItems } from "@/lib/wrongQuestionBook";
+import { StudentBadgeEarnedToast } from "@/components/molecules/StudentBadgeEarnedToast";
+import { useStudentPendingCounts } from "@/hooks/useStudentPendingCounts";
+import { useStudentRewards } from "@/hooks/useStudentRewards";
+import { useUserPreferences } from "@/hooks/useUserPreferences";
+import { sessionDisplayLabel } from "@/lib/appSession";
+import { useAppSession } from "@/hooks/useAppSession";
+import { myWorkPath, piTutorPath, rewardsPath, todoPath, wrongBookPath } from "@/lib/studentRoutes";
 
 const ADVANTAGES = [
   { title: "看清字迹", desc: "拍正、少反光，像课堂展示作业一样清楚。", emoji: "📷" },
@@ -22,8 +28,11 @@ const CAMPUS_TAGS = ["课后巩固", "过程分看得见", "错题有反馈"] as
 /** 学生端：校园青春风首页 */
 export function HomePageStudent() {
   const prefs = useUserPreferences();
-  const [helpOpen, setHelpOpen] = useState(false);
-  const wrongCount = countWrongBookItems();
+  const session = useAppSession();
+  const { counts } = useStudentPendingCounts(Boolean(session));
+  const { earnedCount } = useStudentRewards();
+
+  const myWorkBadge = counts.pendingReleaseCount + counts.variantsPendingCount;
 
   return (
     <div className="page-bg-hero-stunning relative flex min-h-screen flex-col">
@@ -48,8 +57,11 @@ export function HomePageStudent() {
                   希沃智教<span className="text-brand">π</span>
                   <span className="ml-2 text-small font-semibold text-ink-muted">· 和同桌一起更轻松交作业</span>
                 </p>
+                {session ? (
+                  <p className="mt-2 text-small font-semibold text-ink-muted">{sessionDisplayLabel(session)}</p>
+                ) : null}
                 <p className="mx-auto mt-4 max-w-lg text-small leading-relaxed text-ink-muted lg:mx-0">
-                  数学、英语、语文作业：拍一拍就能看分数、过程分和评语。错题会自动收录到错题本。
+                  数学、英语、语文作业：拍一拍就能看分数、过程分和评语。完成作业还能收集 π 徽章兑换奖励。
                 </p>
                 <div className="mx-auto mt-4 flex flex-wrap justify-center gap-2 lg:mx-0 lg:justify-start">
                   {CAMPUS_TAGS.map((tag) => (
@@ -84,51 +96,82 @@ export function HomePageStudent() {
               </div>
             </div>
 
-            <Link
-              to="/todo"
-              className="campus-banner-strip animate-fade-up-in stagger-3 mx-auto mt-6 flex max-w-2xl items-center justify-center gap-2 transition hover:border-primary/40 hover:shadow-md"
-            >
-              <ClipboardList className="h-4 w-4 shrink-0 text-primary" {...CUTE_ICON} aria-hidden />
-              <span>待办任务</span>
-              <span className="text-ink-subtle" aria-hidden>
-                ·
-              </span>
-              <span className="text-ink-muted">完成教师布置的作业</span>
-            </Link>
+            {counts.actionTotal > 0 ? (
+              <div className="animate-fade-up-in stagger-3 mt-6 flex w-full flex-wrap items-center justify-center gap-2 rounded-2xl border border-sky-200/80 bg-sky-50/85 px-4 py-3 text-caption lg:justify-start">
+                <span className="font-bold text-sky-950">待处理</span>
+                {counts.todoCount > 0 ? (
+                  <AppLink
+                    to={todoPath()}
+                    className="rounded-full bg-white px-2.5 py-1 font-bold text-emerald-800 ring-1 ring-emerald-200 hover:bg-emerald-50"
+                  >
+                    {counts.todoCount} 项待交作业
+                  </AppLink>
+                ) : null}
+                {counts.pendingReleaseCount > 0 ? (
+                  <AppLink
+                    to={myWorkPath("work")}
+                    className="rounded-full bg-white px-2.5 py-1 font-bold text-sky-800 ring-1 ring-sky-200 hover:bg-sky-50"
+                  >
+                    {counts.pendingReleaseCount} 份新批改待查看
+                  </AppLink>
+                ) : null}
+                {counts.variantsPendingCount > 0 ? (
+                  <AppLink
+                    to={myWorkPath("variants")}
+                    className="rounded-full bg-white px-2.5 py-1 font-bold text-violet-800 ring-1 ring-violet-200 hover:bg-violet-50"
+                  >
+                    {counts.variantsPendingCount} 道变式待完成
+                  </AppLink>
+                ) : null}
+              </div>
+            ) : null}
 
-            <Link
-              to="/my-work"
-              className="campus-banner-strip animate-fade-up-in stagger-3 mx-auto mt-3 flex max-w-2xl items-center justify-center gap-2 transition hover:border-primary/40 hover:shadow-md"
-            >
-              <BookMarked className="h-4 w-4 shrink-0 text-primary" {...CUTE_ICON} aria-hidden />
-              <span>我的作业</span>
-              {wrongCount > 0 ? (
-                <span className="rounded-full bg-primary px-2 py-0.5 text-[0.65rem] font-black text-white">
-                  {wrongCount}
-                </span>
-              ) : null}
-              <span className="text-ink-subtle" aria-hidden>
-                ·
-              </span>
-              <span className="text-ink-muted">查看教师下发的批改结果</span>
-            </Link>
-
-            <Link
-              to="/wrong-book"
-              className="campus-banner-strip animate-fade-up-in stagger-3 mx-auto mt-3 flex max-w-2xl items-center justify-center gap-2 transition hover:border-primary/40 hover:shadow-md"
-            >
-              <BookMarked className="h-4 w-4 shrink-0 text-primary" {...CUTE_ICON} aria-hidden />
-              <span>我的错题本</span>
-              {wrongCount > 0 ? (
-                <span className="rounded-full bg-primary px-2 py-0.5 text-[0.65rem] font-black text-white">
-                  {wrongCount}
-                </span>
-              ) : null}
-              <span className="text-ink-subtle" aria-hidden>
-                ·
-              </span>
-              <span className="text-ink-muted">批改后自动收录错题</span>
-            </Link>
+            <StudentHomeHub>
+              <StudentHomeEntry
+                to={todoPath()}
+                title="待办任务"
+                description="教师布置的作业，拍照一键交卷"
+                iconVariant="todo"
+                tone="mint"
+                badge={counts.todoCount}
+              />
+              <StudentHomeEntry
+                to={myWorkPath()}
+                title="我的作业"
+                description="批改结果、分数评语与变式题"
+                iconVariant="work"
+                tone="violet"
+                badge={myWorkBadge > 0 ? myWorkBadge : undefined}
+              />
+              <StudentHomeEntry
+                to={wrongBookPath()}
+                title="错题本"
+                description="自动收录错题，标记订正复习"
+                iconVariant="wrongbook"
+                tone="teal"
+                badge={counts.wrongBookCount > 0 ? counts.wrongBookCount : undefined}
+              />
+              <StudentHomeEntry
+                to={piTutorPath()}
+                title="π 助学"
+                description="分析错题、讲解不会的题"
+                iconVariant="tutor"
+                tone="cyan"
+                tagLabel="AI"
+              />
+              <StudentHomeEntry
+                to={rewardsPath()}
+                title="π 奖励"
+                description={
+                  earnedCount > 0
+                    ? `已收集 ${earnedCount} 枚 IP 徽章`
+                    : "完成作业，收集 π 徽章兑好礼"
+                }
+                iconVariant="rewards"
+                tone="grape"
+                badge={earnedCount > 0 ? earnedCount : undefined}
+              />
+            </StudentHomeHub>
 
             <hr className="animate-fade-up-in stagger-3 my-8 border-0 border-t border-dashed border-primary/20" />
 
@@ -139,7 +182,7 @@ export function HomePageStudent() {
               </p>
             </div>
 
-            <div className="mx-auto mt-8 grid w-full max-w-4xl grid-cols-1 gap-4 md:mt-10 md:grid-cols-2 md:gap-5">
+            <div className="mt-8 grid w-full grid-cols-1 gap-4 md:mt-10 md:grid-cols-3 md:gap-5">
               <SubjectCard
                 title="数学作业"
                 description="方程、几何、应用题——逐题过程分，薄弱点帮你记下来。"
@@ -155,6 +198,14 @@ export function HomePageStudent() {
                 theme="english"
                 badge="外语"
                 className="animate-fade-up-in stagger-5"
+              />
+              <SubjectCard
+                title="语文作业"
+                description="字词、阅读、书写规范——多维度点评与薄弱点。"
+                to="/chinese"
+                theme="chinese"
+                badge="语文"
+                className="animate-fade-up-in stagger-6"
               />
             </div>
 
@@ -180,9 +231,9 @@ export function HomePageStudent() {
             </div>
           </div>
         </main>
-        {prefs.showHomeFabHelp ? <FabHelp onClick={() => setHelpOpen(true)} /> : null}
+        <PiAssistantFab show={prefs.showHomeFabHelp} />
+        <StudentBadgeEarnedToast />
       </div>
-      <AiHelpModal open={helpOpen} onClose={() => setHelpOpen(false)} />
     </div>
   );
 }

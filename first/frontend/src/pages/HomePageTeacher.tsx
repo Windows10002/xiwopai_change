@@ -1,25 +1,24 @@
-import { useEffect, useState } from "react";
 import { AppLink } from "@/components/atoms/AppLink";
 import {
   ChevronRight,
   ClipboardList,
+  History,
   LayoutGrid,
   MessageSquareWarning,
   MessagesSquare,
+  Sparkles,
   type LucideIcon,
 } from "lucide-react";
 import { useUserPreferences } from "@/hooks/useUserPreferences";
 import { useAppSession } from "@/hooks/useAppSession";
+import { useTeacherPendingCounts } from "@/hooks/useTeacherPendingCounts";
 import { CUTE_ICON } from "@/components/atoms/cuteIcon";
-import { RoleBadge } from "@/components/atoms/DemoEnvBadge";
+import { PiAssistantFab } from "@/components/atoms/PiAssistantFab";
 import { Navbar } from "@/components/atoms/Navbar";
-import { FabHelp } from "@/components/atoms/FabHelp";
 import { SubjectCard } from "@/components/molecules/SubjectCard";
 import { IpBrandFace } from "@/components/atoms/IpMascot";
-import { AiHelpModal } from "@/components/organisms/AiHelpModal";
-import { fetchInboxCounts } from "@/lib/workspaceApi";
-import { fetchGradingDisputes } from "@/lib/gradingDisputeApi";
-import { loadAuthToken } from "@/lib/apiClient";
+import { sessionDisplayLabel } from "@/lib/appSession";
+import { analyticsPath, workspacePath } from "@/lib/teacherRoutes";
 
 const TEACHER_TOOLS = [
   {
@@ -31,20 +30,34 @@ const TEACHER_TOOLS = [
   },
   {
     to: "/class-analytics",
-    title: "班级看板",
-    desc: "批次均分、共性错题、学生学情",
+    title: "学情中心",
+    desc: "班级/学生学情、薄弱趋势与简报",
     icon: LayoutGrid,
     accent: "teal",
   },
   {
+    to: "/class-analytics?tab=history",
+    title: "批改历史",
+    desc: "本机批改记录，可编辑与删除",
+    icon: History,
+    accent: "teal",
+  },
+  {
     to: "/feedback-dashboard",
-    title: "反馈看板",
-    desc: "汇总判题意见",
+    title: "判题反馈",
+    desc: "汇总教师判题异议",
     icon: MessagesSquare,
     accent: "amber",
   },
   {
-    to: "/settings#disputes",
+    to: "/product-feedback",
+    title: "产品反馈",
+    desc: "π 助手用户建议（可导出）",
+    icon: Sparkles,
+    accent: "amber",
+  },
+  {
+    to: "/disputes",
     title: "学生申诉",
     desc: "处理学生判题异议",
     icon: MessageSquareWarning,
@@ -104,26 +117,26 @@ function ToolCard({
   return (
     <AppLink
       to={to}
-      className={`group flex items-center gap-3 rounded-xl border border-black/[0.06] border-l-[4px] p-4 shadow-card transition-all duration-hover hover:-translate-y-0.5 ${tone.shell} ${tone.shadow}`}
+      className={`group flex min-h-[5.25rem] items-center gap-4 rounded-2xl border border-black/[0.06] border-l-[5px] p-5 shadow-card transition-all duration-hover hover:-translate-y-0.5 md:min-h-[5.75rem] md:p-6 ${tone.shell} ${tone.shadow}`}
     >
       <span
-        className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ring-1 transition-all duration-hover group-hover:scale-105 ${tone.icon}`}
+        className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl ring-1 transition-all duration-hover group-hover:scale-105 ${tone.icon}`}
       >
-        <Icon className="h-5 w-5" {...CUTE_ICON} aria-hidden />
+        <Icon className="h-6 w-6" {...CUTE_ICON} aria-hidden />
       </span>
       <span className="min-w-0 flex-1">
         <span className="flex items-center gap-1.5">
-          <span className="text-small font-extrabold text-ink">{title}</span>
+          <span className="text-body font-extrabold text-ink md:text-lg">{title}</span>
           {badge != null && badge > 0 ? (
-            <span className="rounded-full bg-red-500 px-1.5 py-px text-[0.625rem] font-black leading-none text-white shadow-sm">
+            <span className="rounded-full bg-red-500 px-2 py-0.5 text-[0.65rem] font-black leading-none text-white shadow-sm">
               {badge > 99 ? "99+" : badge}
             </span>
           ) : null}
         </span>
-        <span className="mt-0.5 block truncate text-caption text-ink-muted">{desc}</span>
+        <span className="mt-1 block text-small leading-snug text-ink-muted md:text-base">{desc}</span>
       </span>
       <ChevronRight
-        className={`h-4 w-4 shrink-0 text-ink-subtle transition-all group-hover:translate-x-0.5 ${tone.chevron}`}
+        className={`h-5 w-5 shrink-0 text-ink-subtle transition-all group-hover:translate-x-0.5 ${tone.chevron}`}
         {...CUTE_ICON}
         aria-hidden
       />
@@ -135,114 +148,146 @@ function ToolCard({
 export function HomePageTeacher() {
   const prefs = useUserPreferences();
   const session = useAppSession();
-  const [helpOpen, setHelpOpen] = useState(false);
-  const [inboxPending, setInboxPending] = useState(0);
-  const [disputePending, setDisputePending] = useState(0);
+  const { counts } = useTeacherPendingCounts(true);
 
-  useEffect(() => {
-    if (!loadAuthToken()) return;
-    void fetchInboxCounts()
-      .then((c) => setInboxPending((c.pending_review || c.unpublished_graded) + c.corrections_pending))
-      .catch(() => setInboxPending(0));
-    void fetchGradingDisputes({ status: "pending" })
-      .then((items) => setDisputePending(items.filter((x) => x.submitter_role === "student").length))
-      .catch(() => setDisputePending(0));
-  }, []);
+  const workspaceTo =
+    counts.inboxTotal > 0 ? workspacePath("review") : workspacePath("homework");
 
   return (
     <div className="page-bg-hero-stunning relative flex min-h-screen flex-col">
-      <div className="relative z-10 flex flex-1 flex-col">
-        <Navbar />
-        <main className="mx-auto flex w-full max-w-4xl flex-1 flex-col px-4 py-8 md:px-6 md:py-10">
-          <div className="rounded-[28px] bg-white/95 px-5 py-8 shadow-[0_28px_90px_rgba(15,90,75,0.14)] ring-1 ring-white/90 backdrop-blur-sm sm:px-9 sm:py-9">
-            <div className="flex items-start justify-between gap-4">
-              <div className="min-w-0">
-                <h1 className="select-none text-2xl font-extrabold tracking-tight text-ink md:text-3xl">
-                  智能作业批改
-                  <span className="text-brand"> π</span>
-                </h1>
-                <p className="mt-1.5 text-small font-medium text-[#006D41]">上传照片，查看过程分与评语</p>
-                {session ? (
-                  <div className="mt-3">
-                    <RoleBadge session={session} className="rounded-full px-2.5 py-1 text-[0.6875rem]" />
-                  </div>
-                ) : null}
-              </div>
-              <IpBrandFace size="md" decorative className="hidden shrink-0 sm:block" />
+      <Navbar />
+      <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col px-4 py-8 md:px-6 md:py-10 lg:py-12">
+        <div className="rounded-[28px] bg-white/95 px-5 py-9 shadow-[0_28px_90px_rgba(15,90,75,0.14)] ring-1 ring-white/90 backdrop-blur-sm sm:px-8 sm:py-10 md:px-11 md:py-12">
+          <div className="flex flex-col gap-8 lg:flex-row lg:items-center lg:justify-between lg:gap-12">
+            <div className="mx-auto max-w-xl flex-1 text-center lg:mx-0 lg:text-left">
+              <h1 className="select-none text-3xl font-extrabold tracking-tight text-ink md:text-[2rem] lg:text-4xl">
+                智能作业批改
+                <span className="text-brand"> π</span>
+              </h1>
+              <p className="mt-3 text-lg font-bold text-[#006D41] md:text-xl">上传照片，查看过程分与评语</p>
+              {session ? (
+                <p className="mt-3 text-small font-semibold text-ink-muted md:text-base">
+                  {sessionDisplayLabel(session)}
+                </p>
+              ) : null}
+            </div>
+            <div className="flex justify-center lg:justify-end lg:pr-2">
+              <IpBrandFace size="hero" decorative className="shrink-0" />
+            </div>
+          </div>
+
+          {counts.inboxTotal > 0 || counts.studentDisputes > 0 ? (
+            <div className="mt-6 flex flex-wrap items-center justify-center gap-2 rounded-2xl border border-amber-200/80 bg-amber-50/80 px-4 py-3 text-caption lg:justify-start">
+              <span className="font-bold text-amber-950">待处理</span>
+              {counts.pendingReview + counts.unpublishedGraded > 0 ? (
+                <AppLink
+                  to={workspacePath("review")}
+                  className="rounded-full bg-white px-2.5 py-1 font-bold text-[#006D41] ring-1 ring-primary/20 hover:bg-primary-tint"
+                >
+                  {counts.pendingReview + counts.unpublishedGraded} 份待审阅
+                </AppLink>
+              ) : null}
+              {counts.correctionsPending > 0 ? (
+                <AppLink
+                  to={workspacePath("review")}
+                  className="rounded-full bg-white px-2.5 py-1 font-bold text-sky-800 ring-1 ring-sky-200 hover:bg-sky-50"
+                >
+                  {counts.correctionsPending} 份待验收订正
+                </AppLink>
+              ) : null}
+              {counts.studentDisputes > 0 ? (
+                <AppLink
+                  to="/disputes"
+                  className="rounded-full bg-white px-2.5 py-1 font-bold text-violet-800 ring-1 ring-violet-200 hover:bg-violet-50"
+                >
+                  {counts.studentDisputes} 条学生申诉
+                </AppLink>
+              ) : null}
+            </div>
+          ) : null}
+
+          <section
+            className="mt-8 rounded-2xl bg-gradient-to-br from-primary-tint via-[#ecfdf5]/70 to-teal-50/50 p-5 ring-1 ring-primary/20 sm:p-6"
+            aria-labelledby="grade-start-heading"
+          >
+            <h2
+              id="grade-start-heading"
+              className="select-none text-center text-xl font-extrabold text-[#006D41] md:text-2xl"
+            >
+              开始批改
+            </h2>
+            <p className="mx-auto mt-2 max-w-sm text-center text-small text-ink-muted md:text-base">
+              拍正、少反光，系统自动识别手写并给出分项得分
+            </p>
+            <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-3">
+              <SubjectCard
+                emphasis
+                title="数学作业"
+                description="逐题判分 · 过程分 · 薄弱点"
+                to="/math"
+                theme="math"
+                badge="理科"
+              />
+              <SubjectCard
+                emphasis
+                title="英语作业"
+                description="内容 · 语言 · 结构"
+                to="/english"
+                theme="english"
+                badge="外语"
+              />
+              <SubjectCard
+                emphasis
+                title="语文作业"
+                description="字词 · 阅读 · 书写规范"
+                to="/chinese"
+                theme="chinese"
+                badge="文科"
+              />
+            </div>
+          </section>
+
+          <section className="mt-8" aria-labelledby="teacher-workbench-heading">
+            <div className="mb-4">
+              <h2 id="teacher-workbench-heading" className="text-xl font-extrabold text-ink md:text-2xl">
+                教师工作台
+              </h2>
+              <p className="mt-1 text-small text-ink-muted">
+                常用功能入口 · 学情来自本机批改，作业数据在作业管理
+              </p>
             </div>
 
-            <section
-              className="mt-8 rounded-2xl bg-gradient-to-br from-primary-tint via-[#ecfdf5]/70 to-teal-50/50 p-5 ring-1 ring-primary/20 sm:p-6"
-              aria-labelledby="grade-start-heading"
-            >
-              <h2 id="grade-start-heading" className="select-none text-center text-lg font-extrabold text-[#006D41]">
-                开始批改
-              </h2>
-              <p className="mx-auto mt-1 max-w-sm text-center text-caption text-ink-muted">
-                拍正、少反光，系统自动识别手写并给出分项得分
-              </p>
-              <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-3">
-                <SubjectCard
-                  emphasis
-                  title="数学作业"
-                  description="逐题判分 · 过程分 · 薄弱点"
-                  to="/math"
-                  theme="math"
-                  badge="理科"
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              {TEACHER_TOOLS.map((item) => (
+                <ToolCard
+                  key={item.to}
+                  to={item.to === "/workspace" ? workspaceTo : item.to}
+                  title={item.title}
+                  desc={item.desc}
+                  icon={item.icon}
+                  accent={item.accent}
+                  badge={
+                    item.to === "/workspace" || item.to.startsWith("/workspace")
+                      ? counts.inboxTotal
+                      : "disputeBadge" in item && item.disputeBadge
+                        ? counts.studentDisputes
+                        : undefined
+                  }
                 />
-                <SubjectCard
-                  emphasis
-                  title="语文作业"
-                  description="字词 · 阅读 · 书写规范"
-                  to="/chinese"
-                  theme="chinese"
-                  badge="文科"
-                />
-                <SubjectCard
-                  emphasis
-                  title="英语作业"
-                  description="内容 · 语言 · 结构"
-                  to="/english"
-                  theme="english"
-                  badge="外语"
-                />
-              </div>
-            </section>
+              ))}
+            </div>
+            <p className="mt-4 text-center text-[0.65rem] text-ink-subtle sm:text-left">
+              删除作业不会自动清除学情中的本机批改历史；
+              <AppLink to={analyticsPath({ tab: "history" })} className="mx-1 font-bold text-brand hover:underline">
+                批改历史
+              </AppLink>
+              需单独管理。
+            </p>
+          </section>
+        </div>
+      </main>
 
-            <section className="mt-8" aria-labelledby="teacher-workbench-heading">
-              <div className="mb-4">
-                <h2 id="teacher-workbench-heading" className="text-body font-extrabold text-ink">
-                  教师工作台
-                </h2>
-                <p className="mt-1 text-caption text-ink-muted">与顶部导航一致，点击即可进入</p>
-              </div>
-
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                {TEACHER_TOOLS.map((item) => (
-                  <ToolCard
-                    key={item.to}
-                    to={item.to}
-                    title={item.title}
-                    desc={item.desc}
-                    icon={item.icon}
-                    accent={item.accent}
-                    badge={
-                      item.to === "/workspace"
-                        ? inboxPending
-                        : "disputeBadge" in item && item.disputeBadge
-                          ? disputePending
-                          : undefined
-                    }
-                  />
-                ))}
-              </div>
-            </section>
-          </div>
-        </main>
-
-        {prefs.showHomeFabHelp ? <FabHelp onClick={() => setHelpOpen(true)} /> : null}
-      </div>
-      <AiHelpModal open={helpOpen} onClose={() => setHelpOpen(false)} />
+      <PiAssistantFab show={prefs.showHomeFabHelp} />
     </div>
   );
 }

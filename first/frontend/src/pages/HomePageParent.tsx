@@ -1,16 +1,19 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Camera, ClipboardList, Eye, Heart, Lock, LockOpen, TrendingUp } from "lucide-react";
 
+import { PiAssistantFab } from "@/components/atoms/PiAssistantFab";
 import { Navbar } from "@/components/atoms/Navbar";
+import { useUserPreferences } from "@/hooks/useUserPreferences";
 import { CUTE_ICON } from "@/components/atoms/cuteIcon";
 import { IpBrandFace } from "@/components/atoms/IpMascot";
 import { SubjectCard } from "@/components/molecules/SubjectCard";
 import { AuthenticatedImage } from "@/components/molecules/AuthenticatedImage";
 import { loadAuthToken } from "@/lib/apiClient";
-import { loadGradingHistory } from "@/lib/gradingHistory";
+import { loadGradingHistory, subscribeGradingHistoryChanged } from "@/lib/gradingHistory";
 import { loadParentAnswerLock, saveParentAnswerLock } from "@/lib/parentAnswerLock";
 import { loadStudentProfileName } from "@/lib/studentProfileName";
-import { loadWrongBookItems } from "@/lib/wrongQuestionBook";
+import { countWrongBookItems, WRONG_BOOK_CHANGED } from "@/lib/wrongQuestionBook";
+import { useWorkspaceAssignmentsSync } from "@/hooks/useWorkspaceAssignmentsSync";
 import { fetchParentAssignments, type WorkspaceAssignment } from "@/lib/workspaceApi";
 
 import { formatAssignmentDue } from "@/lib/assignmentDeadline";
@@ -96,8 +99,9 @@ function ParentTaskCard({
 
 /** 家长端首页：孩子任务 + 代拍批改 + 只读学情摘要 */
 export function HomePageParent() {
-  const history = useMemo(() => loadGradingHistory().slice(0, 15), []);
-  const wrongCount = loadWrongBookItems().length;
+  const prefs = useUserPreferences();
+  const [history, setHistory] = useState(() => loadGradingHistory().slice(0, 15));
+  const [wrongCount, setWrongCount] = useState(() => countWrongBookItems());
   const [childTasks, setChildTasks] = useState<WorkspaceAssignment[]>([]);
   const [childName, setChildName] = useState("");
   const [answerLockEnabled, setAnswerLockEnabled] = useState(() => loadParentAnswerLock());
@@ -108,7 +112,7 @@ export function HomePageParent() {
       ? Math.round((history.reduce((a, e) => a + e.detail.scorePercent, 0) / history.length) * 10) / 10
       : null;
 
-  useEffect(() => {
+  const loadChildTasks = useCallback(() => {
     if (!loadAuthToken()) return;
     const profile = loadStudentProfileName();
     void fetchParentAssignments()
@@ -122,6 +126,25 @@ export function HomePageParent() {
       });
   }, []);
 
+  useEffect(() => {
+    loadChildTasks();
+  }, [loadChildTasks]);
+
+  useWorkspaceAssignmentsSync(loadChildTasks);
+
+  const refreshLocalInsights = useCallback(() => {
+    setHistory(loadGradingHistory().slice(0, 15));
+    setWrongCount(countWrongBookItems());
+  }, []);
+
+  useEffect(() => subscribeGradingHistoryChanged(refreshLocalInsights), [refreshLocalInsights]);
+
+  useEffect(() => {
+    const onWrong = () => refreshLocalInsights();
+    window.addEventListener(WRONG_BOOK_CHANGED, onWrong);
+    return () => window.removeEventListener(WRONG_BOOK_CHANGED, onWrong);
+  }, [refreshLocalInsights]);
+
   const toggleAnswerLock = (enabled: boolean) => {
     setAnswerLockEnabled(enabled);
     saveParentAnswerLock(enabled);
@@ -131,19 +154,23 @@ export function HomePageParent() {
   return (
     <div className="page-bg-hero-stunning relative flex min-h-screen flex-col">
       <Navbar />
-      <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col px-4 py-8 md:max-w-4xl md:px-6 md:py-10">
-        <div className="rounded-[28px] bg-gradient-to-br from-rose-50/95 via-white to-amber-50/80 px-6 py-9 shadow-card ring-1 ring-rose-100/80">
-          <div className="flex flex-col items-center text-center sm:flex-row sm:text-left">
-            <IpBrandFace size="md" className="shrink-0" />
-            <div className="mt-4 sm:ml-5 sm:mt-0">
-              <span className="inline-flex items-center gap-1 rounded-full bg-rose-100 px-2.5 py-0.5 text-caption font-bold text-rose-900">
-                <Heart className="h-3 w-3" {...CUTE_ICON} aria-hidden />
+      <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col px-4 py-8 md:px-6 md:py-10 lg:py-12">
+        <div className="rounded-[28px] bg-gradient-to-br from-rose-50/95 via-white to-amber-50/80 px-5 py-9 shadow-[0_28px_90px_rgba(15,90,75,0.14)] ring-1 ring-rose-100/80 backdrop-blur-sm sm:px-8 sm:py-10 md:px-11 md:py-12">
+          <div className="flex flex-col gap-8 lg:flex-row lg:items-center lg:justify-between lg:gap-12">
+            <div className="mx-auto max-w-xl flex-1 text-center lg:mx-0 lg:text-left">
+              <span className="inline-flex items-center gap-1 rounded-full bg-rose-100 px-2.5 py-0.5 text-small font-bold text-rose-900">
+                <Heart className="h-3.5 w-3.5" {...CUTE_ICON} aria-hidden />
                 家长端
               </span>
-              <h1 className="mt-2 text-2xl font-extrabold text-ink">孩子成长一览</h1>
-              <p className="mt-2 text-small text-ink-muted">
+              <h1 className="mt-3 text-3xl font-extrabold tracking-tight text-ink md:text-[2rem] lg:text-4xl">
+                孩子成长一览
+              </h1>
+              <p className="mt-3 text-lg font-medium text-ink-muted md:text-xl">
                 可查看教师布置的任务与参考答案（无需交卷）；也可代孩子拍照批改，学情来自本机记录。
               </p>
+            </div>
+            <div className="flex justify-center lg:justify-end lg:pr-2">
+              <IpBrandFace size="hero" className="shrink-0" />
             </div>
           </div>
 
@@ -206,7 +233,7 @@ export function HomePageParent() {
           </div>
           <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-3">
             <SubjectCard title="数学作业" description="逐题过程分与薄弱点" to="/math" theme="math" badge="代拍" />
-            <SubjectCard title="语文作业" description="字词阅读与书写规范" to="/chinese" theme="math" badge="代拍" />
+            <SubjectCard title="语文作业" description="字词阅读与书写规范" to="/chinese" theme="chinese" badge="代拍" />
             <SubjectCard title="英语作业" description="内容、语言、结构" to="/english" theme="english" badge="代拍" />
           </div>
 
@@ -254,6 +281,7 @@ export function HomePageParent() {
           </p>
         </div>
       </main>
+      <PiAssistantFab show={prefs.showHomeFabHelp} />
     </div>
   );
 }

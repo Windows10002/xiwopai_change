@@ -4,14 +4,16 @@ import { createPortal } from "react-dom";
 import { useNavigate, useLocation } from "react-router-dom";
 import { ChevronDown, Clock } from "lucide-react";
 
+import { AppLink } from "@/components/atoms/AppLink";
 import { CUTE_ICON } from "@/components/atoms/cuteIcon";
+import { withAuthSlot } from "@/lib/authSlot";
 import { buildGroupedHistoryRows, loadGradingHistory, type HistoryDisplayRow } from "@/lib/gradingHistory";
 
 export type HistoryDropdownVariant = "nav" | "toolbar";
 
 export type HistoryDropdownProps = {
   variant?: HistoryDropdownVariant;
-  subjectScope?: "all" | "math" | "english";
+  subjectScope?: "all" | "math" | "english" | "chinese";
   /** 未登录时点击跳转登录页（与批改页门禁一致） */
   requireLogin?: boolean;
 };
@@ -174,9 +176,34 @@ function HistoryMenuPanel({
   );
 }
 
+const navLinkClass = [
+  "inline-flex min-h-11 items-center gap-1 rounded-full border border-black/[0.06] bg-white px-4 py-2 text-small font-semibold text-ink shadow-sm transition",
+  "hover:border-primary/25 hover:text-[#006D41] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-2 focus-visible:ring-offset-white",
+].join(" ");
+
 export function HistoryDropdown({ variant = "nav", subjectScope = "all", requireLogin = false }: HistoryDropdownProps) {
   const navigate = useNavigate();
   const location = useLocation();
+
+  if (variant === "nav") {
+    if (requireLogin) {
+      return (
+        <AppLink
+          to={`/login?redirect=${encodeURIComponent(withAuthSlot("/class-analytics?tab=history"))}`}
+          className={navLinkClass}
+        >
+          <Clock className="h-4 w-4 shrink-0 text-primary" {...CUTE_ICON} aria-hidden />
+          批改历史
+        </AppLink>
+      );
+    }
+    return (
+      <AppLink to={withAuthSlot("/class-analytics?tab=history")} className={navLinkClass}>
+        <Clock className="h-4 w-4 shrink-0 text-primary" {...CUTE_ICON} aria-hidden />
+        批改历史
+      </AppLink>
+    );
+  }
   const [open, setOpen] = useState(false);
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
@@ -198,11 +225,15 @@ export function HistoryDropdown({ variant = "nav", subjectScope = "all", require
     const all = loadGradingHistory();
     const math = buildGroupedHistoryRows(all.filter((e) => e.subject === "math"));
     const eng = buildGroupedHistoryRows(all.filter((e) => e.subject === "english"));
+    const chinese = buildGroupedHistoryRows(all.filter((e) => e.subject === "chinese"));
     if (subjectScope === "all") {
       setMathRows(math.slice(0, 8));
       setEngRows(eng.slice(0, 8));
     } else if (subjectScope === "math") {
       setMathRows(math.slice(0, 12));
+      setEngRows([]);
+    } else if (subjectScope === "chinese") {
+      setMathRows(chinese.slice(0, 12));
       setEngRows([]);
     } else {
       setMathRows([]);
@@ -345,7 +376,7 @@ export function HistoryDropdown({ variant = "nav", subjectScope = "all", require
         aria-haspopup="true"
       >
         <Clock className="h-4 w-4 shrink-0 text-primary" {...CUTE_ICON} aria-hidden />
-        {variant === "toolbar" ? "历史记录" : "批改历史"}
+        批改历史
         <ChevronDown className={`h-4 w-4 shrink-0 text-ink-muted transition ${open ? "rotate-180" : ""}`} aria-hidden />
       </button>
       {floatingMenu}

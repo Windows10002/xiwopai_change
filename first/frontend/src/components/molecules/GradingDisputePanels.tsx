@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
-import { createPortal } from "react-dom";
 import { CheckCircle2, MessageSquareWarning, XCircle } from "lucide-react";
+
+import { AppLink } from "@/components/atoms/AppLink";
 
 import { CUTE_ICON } from "@/components/atoms/cuteIcon";
 import {
@@ -126,8 +127,11 @@ function DisputeCard({
 /** 教师申诉列表主体（设置页 / 批改页侧栏复用） */
 export function TeacherGradingDisputePanelBody({
   onPendingCountChange,
+  filterTab = "all",
 }: {
   onPendingCountChange?: (count: number) => void;
+  /** pending：仅待处理；all：待处理 + 已处理 */
+  filterTab?: "pending" | "all";
 }) {
   const [items, setItems] = useState<GradingDispute[]>([]);
   const [loading, setLoading] = useState(true);
@@ -162,7 +166,12 @@ export function TeacherGradingDisputePanelBody({
       {loading ? <p className="text-caption text-ink-muted">加载中…</p> : null}
       {err ? <p className="text-caption font-semibold text-red-600">{err}</p> : null}
       {!loading && !err ? (
-        <TeacherDisputeLists pending={pending} done={done} onReviewed={() => void reload()} />
+        <TeacherDisputeLists
+          pending={pending}
+          done={filterTab === "all" ? done : []}
+          showDone={filterTab === "all"}
+          onReviewed={() => void reload()}
+        />
       ) : null}
     </>
   );
@@ -189,9 +198,8 @@ export function TeacherGradingDisputePanel() {
 const TOOLBAR_BTN_CLASS =
   "relative inline-flex min-h-9 items-center gap-1.5 rounded-xl bg-amber-50/95 px-3 py-1.5 text-caption font-bold text-amber-950 shadow-sm ring-1 ring-amber-200/80 transition hover:bg-amber-100/90 hover:ring-amber-300/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/50 focus-visible:ring-offset-2 focus-visible:ring-offset-white";
 
-/** 批改页顶栏：打开学生申诉侧栏（仅教师） */
+/** 批改页顶栏：跳转学生申诉工作台 */
 export function TeacherGradingDisputeToolbarButton() {
-  const [open, setOpen] = useState(false);
   const [pendingCount, setPendingCount] = useState(0);
 
   const refreshPendingCount = useCallback(async () => {
@@ -209,96 +217,34 @@ export function TeacherGradingDisputeToolbarButton() {
     return () => window.clearInterval(timer);
   }, [refreshPendingCount]);
 
-  useEffect(() => {
-    if (!open) void refreshPendingCount();
-  }, [open, refreshPendingCount]);
-
   return (
-    <>
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        className={TOOLBAR_BTN_CLASS}
-        aria-haspopup="dialog"
-      >
-        <MessageSquareWarning className="h-4 w-4 shrink-0 text-amber-700" {...CUTE_ICON} aria-hidden />
-        学生申诉
-        {pendingCount > 0 ? (
-          <span className="absolute -right-1.5 -top-1.5 inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-amber-600 px-1 text-[0.62rem] font-black leading-none text-white ring-2 ring-white">
-            {pendingCount > 99 ? "99+" : pendingCount}
-          </span>
-        ) : null}
-      </button>
-
-      {open ? (
-        <TeacherGradingDisputeDrawer
-          pendingCount={pendingCount}
-          onClose={() => setOpen(false)}
-          onPendingCountChange={setPendingCount}
-        />
+    <AppLink to="/disputes" className={TOOLBAR_BTN_CLASS}>
+      <MessageSquareWarning className="h-4 w-4 shrink-0 text-amber-700" {...CUTE_ICON} aria-hidden />
+      学生申诉
+      {pendingCount > 0 ? (
+        <span className="absolute -right-1.5 -top-1.5 inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-amber-600 px-1 text-[0.62rem] font-black leading-none text-white ring-2 ring-white">
+          {pendingCount > 99 ? "99+" : pendingCount}
+        </span>
       ) : null}
-    </>
-  );
-}
-
-function TeacherGradingDisputeDrawer({
-  pendingCount,
-  onClose,
-  onPendingCountChange,
-}: {
-  pendingCount: number;
-  onClose: () => void;
-  onPendingCountChange: (n: number) => void;
-}) {
-  return createPortal(
-    <div
-      className="fixed inset-0 z-[130] flex justify-end bg-black/40 backdrop-blur-[2px]"
-      role="dialog"
-      aria-modal="true"
-      aria-label="学生判题申诉"
-    >
-      <button type="button" className="absolute inset-0 cursor-default" aria-label="关闭申诉面板" onClick={onClose} />
-      <aside className="relative z-10 flex h-full min-h-0 w-full max-w-md flex-col border-l border-black/[0.08] bg-white shadow-2xl">
-        <div className="flex flex-wrap items-start justify-between gap-3 border-b border-black/[0.06] bg-gradient-to-r from-amber-50/80 via-white to-primary-tint/30 px-4 py-4">
-          <div className="min-w-0">
-            <p className="flex items-center gap-2 text-body font-extrabold text-ink">
-              <MessageSquareWarning className="h-5 w-5 text-amber-700" {...CUTE_ICON} aria-hidden />
-              学生判题申诉
-            </p>
-            <p className="mt-1 text-caption leading-relaxed text-ink-muted">
-              {pendingCount > 0 ? `待处理 ${pendingCount} 条` : "暂无待处理"} · 确认后提交后端优化判题
-            </p>
-          </div>
-          <button
-            type="button"
-            className="rounded-full border border-black/[0.08] px-3 py-1.5 text-caption font-semibold text-ink-muted hover:bg-black/[0.03]"
-            onClick={onClose}
-          >
-            关闭
-          </button>
-        </div>
-        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4">
-          <TeacherGradingDisputePanelBody onPendingCountChange={onPendingCountChange} />
-        </div>
-      </aside>
-    </div>,
-    document.body,
+    </AppLink>
   );
 }
 
 function TeacherDisputeLists({
   pending,
   done,
+  showDone = true,
   onReviewed,
 }: {
   pending: GradingDispute[];
   done: GradingDispute[];
+  showDone?: boolean;
   onReviewed: () => void;
 }) {
   return (
     <div className="space-y-6">
       <div>
-        <h3 className="text-small font-bold text-ink">待处理（{pending.length}）</h3>
+        {showDone ? <h3 className="text-small font-bold text-ink">待处理（{pending.length}）</h3> : null}
         {pending.length === 0 ? (
           <p className="mt-2 text-caption text-ink-muted">暂无待处理申诉。</p>
         ) : (
@@ -309,7 +255,7 @@ function TeacherDisputeLists({
           </ul>
         )}
       </div>
-      {done.length > 0 ? (
+      {showDone && done.length > 0 ? (
         <div>
           <h3 className="text-small font-bold text-ink-muted">已处理</h3>
           <ul className="mt-3 space-y-3 opacity-90">

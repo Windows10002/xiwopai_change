@@ -6,21 +6,62 @@ const MAX_ENTRIES = 400;
 
 export const GRADING_HISTORY_CHANGED = "grading-history-changed";
 
+const GRADING_HISTORY_BROADCAST = "seewo-pi-grading-history-v1";
+
+let gradingHistoryBroadcast: BroadcastChannel | null = null;
+
+function getGradingHistoryBroadcast(): BroadcastChannel | null {
+  if (typeof BroadcastChannel === "undefined") return null;
+  if (!gradingHistoryBroadcast) gradingHistoryBroadcast = new BroadcastChannel(GRADING_HISTORY_BROADCAST);
+  return gradingHistoryBroadcast;
+}
+
 function emitHistoryChanged(): void {
-  if (typeof window !== "undefined") {
-    window.dispatchEvent(new Event(GRADING_HISTORY_CHANGED));
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(new Event(GRADING_HISTORY_CHANGED));
+  try {
+    getGradingHistoryBroadcast()?.postMessage({ t: Date.now() });
+  } catch {
+    /* ignore */
   }
+}
+
+/** 订阅本机批改历史变更（含其它标签页的批改/错题同步） */
+export function subscribeGradingHistoryChanged(onChange: () => void): () => void {
+  if (typeof window === "undefined") return () => {};
+
+  const handler = () => onChange();
+  window.addEventListener(GRADING_HISTORY_CHANGED, handler);
+
+  const ch = getGradingHistoryBroadcast();
+  const onMessage = () => onChange();
+  ch?.addEventListener("message", onMessage);
+
+  const onFocus = () => onChange();
+  window.addEventListener("focus", onFocus);
+
+  return () => {
+    window.removeEventListener(GRADING_HISTORY_CHANGED, handler);
+    ch?.removeEventListener("message", onMessage);
+    window.removeEventListener("focus", onFocus);
+  };
 }
 
 export type GradingHistoryEntry = {
   id: string;
   createdAt: number;
-  subject: "math" | "english";
+  subject: "math" | "english" | "chinese";
   fileName: string;
   /** 重命名后的展示标题（优先于 fileName） */
   displayTitle?: string;
   /** 关联任务/文件夹名称 */
   assignmentTitle?: string;
+  /** 作业管理任务 id（服务端） */
+  assignmentId?: string;
+  /** 学生提交 id（服务端，与 workspace 同步） */
+  submissionId?: string;
+  /** 任务班级名快照 */
+  className?: string;
   /** 教师批改时标注的学生姓名，用于个性化学情汇总 */
   studentName?: string;
   /** 批改时选择的年级/学段 */
@@ -72,6 +113,9 @@ export function saveGradingHistoryEntry(
     fileName: entry.fileName,
     displayTitle: entry.displayTitle,
     assignmentTitle: entry.assignmentTitle,
+    assignmentId: entry.assignmentId,
+    submissionId: entry.submissionId,
+    className: entry.className,
     studentName: entry.studentName,
     gradeLevel: entry.gradeLevel,
     detail: entry.detail,
@@ -109,7 +153,20 @@ export function historyEntryTitle(entry: GradingHistoryEntry): string {
 
 export function updateGradingHistoryEntry(
   id: string,
-  patch: Partial<Pick<GradingHistoryEntry, "fileName" | "displayTitle" | "assignmentTitle" | "studentName" | "gradeLevel" | "detail">>,
+  patch: Partial<
+    Pick<
+      GradingHistoryEntry,
+      | "fileName"
+      | "displayTitle"
+      | "assignmentTitle"
+      | "assignmentId"
+      | "submissionId"
+      | "className"
+      | "studentName"
+      | "gradeLevel"
+      | "detail"
+    >
+  >,
 ): GradingHistoryEntry | null {
   const prev = loadGradingHistory();
   const idx = prev.findIndex((e) => e.id === id);
@@ -125,10 +182,15 @@ export function updateGradingHistoryEntry(
   return next[idx]!;
 }
 
-export function deleteGradingHistoryEntry(id: string): void {
-  const next = loadGradingHistory().filter((e) => e.id !== id);
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
-  emitHistoryChanged();
+export function deleteGradingHistoryEntry(id: string): boolean {
+  const next = prune(loadGradingHistory().filter((e) => e.id !== id));
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+    emitHistoryChanged();
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 /** 删除同一文件夹批量批改产生的全部条目，返回被删 id */
@@ -192,7 +254,7 @@ export function clearGradingHistory(): void {
 }
 
 /** 仅移除某一学科的历史，其它学科记录保留；返回被移除条目的 id（便于同步清理 IndexedDB 原图） */
-export function clearGradingHistoryForSubject(subject: "math" | "english"): string[] {
+export function clearGradingHistoryForSubject(subject: "math" | "english" | "chinese"): string[] {
   const prev = loadGradingHistory();
   const removed = prev.filter((e) => e.subject === subject).map((e) => e.id);
   const next = prev.filter((e) => e.subject !== subject);

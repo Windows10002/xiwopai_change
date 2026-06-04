@@ -1,15 +1,17 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Link } from "react-router-dom";
 import { Camera, ClipboardList, Loader2, RefreshCw } from "lucide-react";
 
-import { Navbar } from "@/components/atoms/Navbar";
-import { PageCampusDeco } from "@/components/atoms/PageCampusDeco";
+import { AppLink } from "@/components/atoms/AppLink";
+import { StudentPageShell } from "@/components/molecules/StudentPageShell";
+import { myWorkPath } from "@/lib/studentRoutes";
 import { PrimaryButton } from "@/components/atoms/PrimaryButton";
 import { AuthenticatedImage } from "@/components/molecules/AuthenticatedImage";
 import { CUTE_ICON } from "@/components/atoms/cuteIcon";
 import { useAppSession } from "@/hooks/useAppSession";
 import { loadStudentProfileName, saveStudentProfileName } from "@/lib/studentProfileName";
 import { assignmentDueLabel, submitBlockedReason } from "@/lib/assignmentDeadline";
+import { useWorkspaceAssignmentsSync } from "@/hooks/useWorkspaceAssignmentsSync";
+import { syncRewardsFromSubmissions } from "@/lib/studentRewards";
 import { fetchStudentTodo, submitAssignmentWork, type WorkspaceAssignment } from "@/lib/workspaceApi";
 
 const SUBJECT_CN = { math: "数学", english: "英语", chinese: "语文" } as const;
@@ -59,6 +61,8 @@ export function TodoPage() {
     void refresh();
   }, [refresh]);
 
+  useWorkspaceAssignmentsSync(refresh);
+
   const pickFile = (assignmentId: string) => {
     pendingAssignmentRef.current = assignmentId;
     fileRef.current?.click();
@@ -75,6 +79,7 @@ export function TodoPage() {
     setSubmittingId(aid);
     try {
       const result = await submitAssignmentWork(aid, file, { studentName: profileName.trim(), autoPublish: false });
+      if (result.submission) syncRewardsFromSubmissions([result.submission]);
       setToast(
         result.submission?.status === "correction_pending" || task?.resubmit_allowed
           ? "重交成功，系统已重新批改，请等待教师审阅"
@@ -92,10 +97,8 @@ export function TodoPage() {
   };
 
   return (
-    <div className="page-bg-hero-stunning relative flex min-h-screen flex-col">
-      <PageCampusDeco />
-      <Navbar />
-      <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-6 px-4 py-8 md:px-6">
+    <StudentPageShell pageTitle="待办任务">
+      <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-6 px-4 py-6 md:px-6 md:py-8">
         <div>
           <h1 className="text-2xl font-extrabold text-ink">待办任务</h1>
           <p className="mt-2 text-small text-ink-muted">
@@ -151,9 +154,9 @@ export function TodoPage() {
           <div className="rounded-2xl border border-dashed border-primary/25 bg-white/80 py-16 text-center">
             <ClipboardList className="mx-auto h-10 w-10 text-primary/60" {...CUTE_ICON} aria-hidden />
             <p className="mt-4 text-small font-semibold text-ink">暂无待办</p>
-            <Link to="/my-work" className="mt-2 inline-block text-caption font-bold text-brand">
+            <AppLink to={myWorkPath()} className="mt-2 inline-block text-caption font-bold text-brand">
               查看我的作业 →
-            </Link>
+            </AppLink>
           </div>
         ) : (
           <ul className="space-y-3">
@@ -239,6 +242,6 @@ export function TodoPage() {
           </p>
         ) : null}
       </main>
-    </div>
+    </StudentPageShell>
   );
 }

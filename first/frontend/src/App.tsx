@@ -20,9 +20,19 @@ const ClassAnalyticsPage = lazy(() =>
 const FeedbackDashboardPage = lazy(() =>
   import("@/pages/FeedbackDashboardPage").then((m) => ({ default: m.FeedbackDashboardPage })),
 );
+const ProductFeedbackPage = lazy(() =>
+  import("@/pages/ProductFeedbackPage").then((m) => ({ default: m.ProductFeedbackPage })),
+);
 const MyWorkPage = lazy(() => import("@/pages/MyWorkPage").then((m) => ({ default: m.MyWorkPage })));
 const TodoPage = lazy(() => import("@/pages/TodoPage").then((m) => ({ default: m.TodoPage })));
+const StudentRewardsPage = lazy(() =>
+  import("@/pages/StudentRewardsPage").then((m) => ({ default: m.StudentRewardsPage })),
+);
+const StudentPiTutorPage = lazy(() =>
+  import("@/pages/StudentPiTutorPage").then((m) => ({ default: m.StudentPiTutorPage })),
+);
 const WorkspacePage = lazy(() => import("@/pages/WorkspacePage").then((m) => ({ default: m.WorkspacePage })));
+const DisputesPage = lazy(() => import("@/pages/DisputesPage").then((m) => ({ default: m.DisputesPage })));
 
 function PageFallback() {
   return (
@@ -80,9 +90,9 @@ export default function App() {
           path="/student-analytics"
           element={
             <Lazy>
-              <ProtectedRoleRoute anyOf={["analytics.student", "analytics.class"]} loginRedirect="/student-analytics">
+              <RequireLoginRoute loginRedirect="/student-analytics">
                 <StudentAnalyticsPage />
-              </ProtectedRoleRoute>
+              </RequireLoginRoute>
             </Lazy>
           }
         />
@@ -102,6 +112,16 @@ export default function App() {
             <Lazy>
               <ProtectedRoleRoute anyOf={["feedback.dashboard"]}>
                 <FeedbackDashboardPage />
+              </ProtectedRoleRoute>
+            </Lazy>
+          }
+        />
+        <Route
+          path="/product-feedback"
+          element={
+            <Lazy>
+              <ProtectedRoleRoute anyOf={["feedback.dashboard"]}>
+                <ProductFeedbackPage />
               </ProtectedRoleRoute>
             </Lazy>
           }
@@ -127,11 +147,41 @@ export default function App() {
           }
         />
         <Route
+          path="/rewards"
+          element={
+            <Lazy>
+              <ProtectedRoleRoute anyOf={["rewards.view"]}>
+                <StudentRewardsPage />
+              </ProtectedRoleRoute>
+            </Lazy>
+          }
+        />
+        <Route
+          path="/pi-tutor"
+          element={
+            <Lazy>
+              <ProtectedRoleRoute anyOf={["pi.tutor"]}>
+                <StudentPiTutorPage />
+              </ProtectedRoleRoute>
+            </Lazy>
+          }
+        />
+        <Route
           path="/workspace"
           element={
             <Lazy>
               <ProtectedRoleRoute anyOf={["workspace.manage"]}>
                 <WorkspacePage />
+              </ProtectedRoleRoute>
+            </Lazy>
+          }
+        />
+        <Route
+          path="/disputes"
+          element={
+            <Lazy>
+              <ProtectedRoleRoute anyOf={["disputes.review"]}>
+                <DisputesPage />
               </ProtectedRoleRoute>
             </Lazy>
           }

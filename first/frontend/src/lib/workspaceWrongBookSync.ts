@@ -32,7 +32,8 @@ export function syncWrongBookFromSubmission(sub: WorkspaceSubmission): boolean {
   const detail = submissionToDetail(sub);
   if (!detail) return false;
 
-  const subject = sub.subject === "english" ? "english" : "math";
+  const subject =
+    sub.subject === "english" ? "english" : sub.subject === "chinese" ? "chinese" : "math";
   const historyId = `ws-${sub.id}`;
   const exists = loadGradingHistory().some((e) => e.id === historyId);
   if (!exists) {
@@ -42,6 +43,9 @@ export function syncWrongBookFromSubmission(sub: WorkspaceSubmission): boolean {
       fileName: sub.file_name || "课堂试卷",
       displayTitle: sub.assignment?.title || sub.file_name || "课堂试卷",
       assignmentTitle: sub.assignment?.title,
+      assignmentId: sub.assignment_id,
+      submissionId: sub.id,
+      className: sub.assignment?.class_name,
       studentName: sub.student_name,
       detail,
     });

@@ -18,6 +18,7 @@ SPA_ROUTES = (
     "/class-analytics",
     "/feedback-dashboard",
     "/workspace",
+    "/disputes",
     "/todo",
     "/my-work",
 )

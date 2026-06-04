@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Link, useLocation, useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
+import { AppLink } from "@/components/atoms/AppLink";
 import { BookOpen, Calculator, Eraser } from "lucide-react";
 import { HistoryDropdown } from "@/components/atoms/Navbar";
 import { PrimaryButton } from "@/components/atoms/PrimaryButton";
 import { Breadcrumb, type BreadcrumbItem } from "@/components/atoms/Breadcrumb";
-import { FabHelp } from "@/components/atoms/FabHelp";
+import { PiAssistantFab } from "@/components/atoms/PiAssistantFab";
 import { PageCampusDeco } from "@/components/atoms/PageCampusDeco";
 import { useIsStudentUi } from "@/hooks/useIsStudentUi";
 import { IpBrandFace } from "@/components/atoms/IpMascot";
@@ -12,7 +13,6 @@ import { HomeworkPreview, type PaperMark } from "@/components/atoms/HomeworkPrev
 import { StepIndicator, getGradingStepLabel } from "@/components/molecules/StepIndicator";
 import { UploadDropzone } from "@/components/organisms/UploadDropzone";
 import { ScoreResultCard } from "@/components/organisms/ScoreResultCard";
-import { AiHelpModal } from "@/components/organisms/AiHelpModal";
 import { BatchInsightsModal } from "@/components/organisms/BatchInsightsModal";
 import {
   GradingContextModal,
@@ -40,8 +40,10 @@ import { saveUserPreferences } from "@/lib/userPreferences";
 import { checkImageQuality } from "@/lib/imageQualityCheck";
 import { rememberStudentFromGrading } from "@/lib/studentRoster";
 import { loadStudentProfileName } from "@/lib/studentProfileName";
+import { syncRewardsFromGradingEntry } from "@/lib/studentRewards";
 import { publishSubmissionToStudent, type WorkspaceAssignment } from "@/lib/workspaceApi";
 import { defaultGradeLevelForTeacher } from "@/lib/teacherGradeLevel";
+import { scoringPipelineSubject, subjectLabelCn } from "@/lib/gradeSubject";
 import { DEMO_PUBLISH_HINT } from "@/lib/demoEnvironment";
 import { canManageGrading } from "@/lib/rolePermissions";
 import { useUserPreferences } from "@/hooks/useUserPreferences";
@@ -53,7 +55,7 @@ export type GradingWorkspaceProps = {
   subjectLabel: string;
   uploadTitle: string;
   uploadHint?: string;
-  subject: "math" | "english";
+  subject: "math" | "english" | "chinese";
 };
 
 const ALLOWED_IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "image/bmp", "image/gif"]);
@@ -83,7 +85,7 @@ function isAllowedImageFile(file: File): boolean {
   return ALLOWED_IMAGE_TYPES.has(file.type) || ALLOWED_IMAGE_EXTENSIONS.has(ext);
 }
 
-const SUBJECT_TOOLBAR_ICON = { math: Calculator, english: BookOpen } as const;
+const SUBJECT_TOOLBAR_ICON = { math: Calculator, english: BookOpen, chinese: BookOpen } as const;
 
 /**
  * 批改页主体：选图 →「开始批改」→ 识别与结果；面包屑随步骤更新。
@@ -94,6 +96,7 @@ export function GradingWorkspace({
   uploadHint,
   subject,
 }: GradingWorkspaceProps) {
+  const pipelineSubject = scoringPipelineSubject(subject);
   const [uploadStatus, setUploadStatus] = useState<UploadPanelStatus>({ phase: "idle" });
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [result, setResult] = useState<GradingResultDetail | null>(null);
@@ -110,7 +113,6 @@ export function GradingWorkspace({
   const canManage = session ? canManageGrading(session) : false;
   const teacherDefaultGradeLevel = useMemo(() => defaultGradeLevelForTeacher(session), [session]);
   const isStudentUi = useIsStudentUi();
-  const [helpOpen, setHelpOpen] = useState(false);
   const [batchInsightsOpen, setBatchInsightsOpen] = useState(false);
   const [cachedBatchInsights, setCachedBatchInsights] = useState<BatchInsightsResponse | null>(null);
   /** 无本地文件列表时（历史/草稿）用于学情与导出的显示名 */
@@ -127,7 +129,12 @@ export function GradingWorkspace({
   const [essayPromptText, setEssayPromptText] = useState("");
   const [assignmentPickerOpen, setAssignmentPickerOpen] = useState(false);
   const [linkedAssignmentTitle, setLinkedAssignmentTitle] = useState("");
-  const linkedAssignmentRef = useRef<{ id: string; title: string } | null>(null);
+  const linkedAssignmentRef = useRef<{
+    id: string;
+    title: string;
+    subject?: "math" | "english" | "chinese";
+    className?: string;
+  } | null>(null);
   const taskFollowUpFileRef = useRef<HTMLInputElement>(null);
   const essayPromptFileRef = useRef<File | null>(null);
   /** 与 serverPreviewByIndexRef 同步：服务端 `/uploads/...` 路径，按批改批次下标 */
@@ -417,7 +424,12 @@ export function GradingWorkspace({
   }, [prefs.defaultGradeLevel, prefs.defaultTeacherNote, prefs.rememberGradingContext]);
 
   const handleAssignmentPicked = useCallback((assignment: WorkspaceAssignment) => {
-    linkedAssignmentRef.current = { id: assignment.id, title: assignment.title };
+    linkedAssignmentRef.current = {
+      id: assignment.id,
+      title: assignment.title,
+      subject: assignment.subject,
+      className: assignment.class_name,
+    };
     setLinkedAssignmentTitle(assignment.title);
     setAssignmentPickerOpen(false);
     setUploadStatus({ phase: "info", message: `已关联任务「${assignment.title}」，请选择学生作业图片。` });
@@ -536,6 +548,15 @@ export function GradingWorkspace({
               ...(linkedAssignmentRef.current?.title
                 ? { assignmentTitle: linkedAssignmentRef.current.title }
                 : {}),
+              ...(linkedAssignmentRef.current?.id
+                ? { assignmentId: linkedAssignmentRef.current.id }
+                : {}),
+              ...(linkedAssignmentRef.current?.className
+                ? { className: linkedAssignmentRef.current.className }
+                : {}),
+              ...(submissionIdByIndexRef.current[index]
+                ? { submissionId: submissionIdByIndexRef.current[index] }
+                : {}),
               ...(teacherGradeLevel.trim() ? { gradeLevel: teacherGradeLevel.trim() } : {}),
               ...(folderGroupKey
                 ? {
@@ -548,6 +569,9 @@ export function GradingWorkspace({
             });
             historyIdByIndexRef.current[index] = rec.id;
             setHistoryEntryIdByIndex((prev) => ({ ...prev, [index]: rec.id }));
+            if (session?.role === "student") {
+              syncRewardsFromGradingEntry(rec.id, detail.scorePercent, subject, file.name);
+            }
             refreshHistory();
             try {
               const blob = await fileToJpegBlobForStorage(file);
@@ -718,7 +742,7 @@ export function GradingWorkspace({
       if (entry.subject !== subject) {
         setUploadStatus({
           phase: "error",
-          message: `该记录属于「${entry.subject === "math" ? "数学" : "英语"}」批改，请在对应学科页面打开历史。`,
+          message: `该记录属于「${subjectLabelCn(entry.subject)}」批改，请在对应学科页面打开历史。`,
         });
         schedule(() => setUploadStatus({ phase: "idle" }), 5000);
         return;
@@ -774,8 +798,31 @@ export function GradingWorkspace({
   );
 
   useEffect(() => {
-    const st = location.state as { openGradingHistory?: boolean; historyEntryId?: string } | null;
+    const st = location.state as {
+      openGradingHistory?: boolean;
+      historyEntryId?: string;
+      linkAssignment?: {
+        id: string;
+        title: string;
+        subject?: "math" | "english" | "chinese";
+        className?: string;
+      };
+    } | null;
     if (!st || isGrading) return;
+    if (st.linkAssignment && st.linkAssignment.subject === subject) {
+      linkedAssignmentRef.current = st.linkAssignment;
+      setLinkedAssignmentTitle(st.linkAssignment.title);
+      setUploadStatus({
+        phase: "info",
+        message: `已关联任务「${st.linkAssignment.title}」，请选择学生作业图片。`,
+      });
+      schedule(() => setUploadStatus({ phase: "idle" }), 4200);
+      navigate(
+        { pathname: location.pathname, search: location.search, hash: location.hash },
+        { replace: true, state: {} },
+      );
+      return;
+    }
     if (st.historyEntryId) {
       const entry = loadGradingHistory().find((e) => e.id === st.historyEntryId);
       if (entry && entry.subject === subject) {
@@ -944,7 +991,13 @@ export function GradingWorkspace({
 
   /** 数学：在试卷预览右侧按题序叠对/错/半对（与分项列表顺序一致，非像素级坐标） */
   const paperMarks = useMemo<PaperMark[] | undefined>(() => {
-    if (!prefs.showMathPaperMarks || subject !== "math" || !previewUrl || !result?.dimensions?.length) return undefined;
+    if (
+      !prefs.showMathPaperMarks ||
+      (subject !== "math" && subject !== "chinese") ||
+      !previewUrl ||
+      !result?.dimensions?.length
+    )
+      return undefined;
     const dims = result.dimensions;
     return dims.map((d, i) => {
       const st = (d.status ?? "").trim();
@@ -985,7 +1038,7 @@ export function GradingWorkspace({
             <div className="flex min-w-0 flex-1 flex-col gap-2.5 sm:flex-row sm:items-center sm:gap-3 md:gap-4">
               <div className="flex shrink-0 items-center gap-2 md:gap-2.5">
                 <div className="flex shrink-0 items-center justify-center rounded-xl border border-primary/20 bg-white/90 p-0.5 shadow-sm ring-1 ring-primary/10 sm:rounded-2xl sm:p-1">
-                <Link
+                <AppLink
                   to="/"
                   title="返回应用首页"
                   aria-label="返回应用首页"
@@ -996,7 +1049,7 @@ export function GradingWorkspace({
                     decorative
                     className="!h-10 !w-10 transition group-hover:drop-shadow-lg sm:!h-12 sm:!w-12 md:!h-[3.35rem] md:!w-[3.35rem]"
                   />
-                </Link>
+                </AppLink>
               </div>
                 <div
                   className="inline-flex w-fit max-w-full shrink-0 cursor-default select-none items-center gap-2 rounded-xl border border-primary/22 bg-primary-tint/70 px-2.5 py-1.5 shadow-sm md:gap-2.5 md:px-3 md:py-2"
@@ -1248,7 +1301,7 @@ export function GradingWorkspace({
               </div>
               <div className="flex h-full min-h-0 min-w-0 max-w-full flex-col">
                 <ScoreResultCard
-                  subject={subject}
+                  subject={pipelineSubject}
                   result={result}
                   isGrading={isGrading}
                   subjectTitle={subjectLabel}
@@ -1263,13 +1316,13 @@ export function GradingWorkspace({
             </div>
           </div>
         </main>
-        {prefs.showGradingFabHelp ? <FabHelp onClick={() => setHelpOpen(true)} /> : null}
+        <PiAssistantFab show={prefs.showGradingFabHelp} />
       </div>
 
       <BatchInsightsModal
         open={batchInsightsOpen}
         onClose={() => setBatchInsightsOpen(false)}
-        subject={subject}
+        subject={pipelineSubject}
         subjectLabel={subjectLabel}
         entries={batchInsightEntries}
         gradeLevel={teacherGradeLevel}
@@ -1280,11 +1333,10 @@ export function GradingWorkspace({
         enableVariantDispatch={canManage}
         onInsightsData={setCachedBatchInsights}
       />
-      <AiHelpModal open={helpOpen} onClose={() => setHelpOpen(false)} />
       <GradingContextModal
         open={contextModalOpen}
         fileCount={contextFileCount}
-        subject={subject}
+        subject={pipelineSubject}
         initialGradeLevel={prefs.defaultGradeLevel}
         defaultGradeLevel={teacherDefaultGradeLevel}
         initialTeacherNote={prefs.defaultTeacherNote}
@@ -1297,7 +1349,7 @@ export function GradingWorkspace({
       {canManage ? (
         <PublishedAssignmentPickerModal
           open={assignmentPickerOpen}
-          subject={subject}
+          subject={pipelineSubject}
           onSelect={handleAssignmentPicked}
           onClose={() => setAssignmentPickerOpen(false)}
         />

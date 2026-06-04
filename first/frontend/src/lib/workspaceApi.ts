@@ -1,6 +1,11 @@
 import { apiFetch, parseApiJson, type ApiJson } from "@/lib/apiClient";
 import type { GradingResultDetail } from "@/types/grading";
 import { mapApiResultToDetail } from "@/lib/gradeApi";
+import { emitWorkspaceAssignmentsChanged } from "@/lib/workspaceAssignmentsSync";
+
+function notifyWorkspaceDataChanged(): void {
+  emitWorkspaceAssignmentsChanged();
+}
 
 export type WorkspaceSubject = "math" | "english" | "chinese";
 
@@ -190,6 +195,7 @@ export async function createAssignment(
   });
   const json = await parseApiJson<ApiJson & { assignment?: WorkspaceAssignment }>(res);
   if (!json.assignment) throw new Error("创建任务失败");
+  notifyWorkspaceDataChanged();
   return json.assignment;
 }
 
@@ -204,12 +210,14 @@ export async function updateAssignment(
   });
   const json = await parseApiJson<ApiJson & { assignment?: WorkspaceAssignment }>(res);
   if (!json.assignment) throw new Error("更新任务失败");
+  notifyWorkspaceDataChanged();
   return json.assignment;
 }
 
 export async function deleteAssignment(id: string): Promise<void> {
   const res = await apiFetch(`/api/assignments/${encodeURIComponent(id)}`, { method: "DELETE" });
   await parseApiJson(res);
+  notifyWorkspaceDataChanged();
 }
 
 export async function setAssignmentLateSubmit(id: string, enabled: boolean): Promise<WorkspaceAssignment> {
@@ -219,6 +227,7 @@ export async function setAssignmentLateSubmit(id: string, enabled: boolean): Pro
   });
   const json = await parseApiJson<ApiJson & { assignment?: WorkspaceAssignment }>(res);
   if (!json.assignment) throw new Error("操作失败");
+  notifyWorkspaceDataChanged();
   return json.assignment;
 }
 
@@ -239,6 +248,7 @@ export async function returnSubmissionForCorrection(
   });
   const json = await parseApiJson<ApiJson & { submission?: WorkspaceSubmission }>(res);
   if (!json.submission) throw new Error("退回失败");
+  notifyWorkspaceDataChanged();
   return json.submission;
 }
 
@@ -298,12 +308,14 @@ export async function fetchStudentTodo(
 export async function publishAssignment(id: string): Promise<void> {
   const res = await apiFetch(`/api/assignments/${encodeURIComponent(id)}/publish`, { method: "POST" });
   await parseApiJson(res);
+  notifyWorkspaceDataChanged();
 }
 
 export async function releaseAssignmentAnswer(id: string): Promise<WorkspaceAssignment> {
   const res = await apiFetch(`/api/assignments/${encodeURIComponent(id)}/release-answer`, { method: "POST" });
   const json = await parseApiJson<ApiJson & { assignment?: WorkspaceAssignment }>(res);
   if (!json.assignment) throw new Error("开放答案失败");
+  notifyWorkspaceDataChanged();
   return json.assignment;
 }
 
@@ -311,6 +323,7 @@ export async function revokeAssignmentAnswer(id: string): Promise<WorkspaceAssig
   const res = await apiFetch(`/api/assignments/${encodeURIComponent(id)}/revoke-answer`, { method: "POST" });
   const json = await parseApiJson<ApiJson & { assignment?: WorkspaceAssignment }>(res);
   if (!json.assignment) throw new Error("取消开放答案失败");
+  notifyWorkspaceDataChanged();
   return json.assignment;
 }
 
@@ -328,7 +341,9 @@ export async function publishPendingSubmissions(assignmentId: string): Promise<n
     method: "POST",
   });
   const json = await parseApiJson<ApiJson & { count?: number }>(res);
-  return json.count ?? 0;
+  const count = json.count ?? 0;
+  notifyWorkspaceDataChanged();
+  return count;
 }
 
 export async function submitAssignmentWork(
@@ -355,6 +370,7 @@ export async function submitAssignmentWork(
   >(res);
   const subject = json.subject ?? json.submission?.subject ?? "math";
   const detail = json.result ? mapApiResultToDetail(subject, json.result) : submissionToDetail(json.submission!);
+  notifyWorkspaceDataChanged();
   return {
     submission: json.submission ?? null,
     detail,
@@ -413,6 +429,7 @@ export async function publishSubmissionToStudent(submissionId: string): Promise<
   const res = await apiFetch(`/api/submissions/${encodeURIComponent(submissionId)}/publish`, { method: "POST" });
   const json = await parseApiJson<ApiJson & { submission?: WorkspaceSubmission }>(res);
   if (!json.submission) throw new Error("发布失败");
+  notifyWorkspaceDataChanged();
   return json.submission;
 }
 
@@ -422,6 +439,7 @@ export async function submitCorrection(submissionId: string, note?: string): Pro
     body: JSON.stringify({ note: note ?? "" }),
   });
   await parseApiJson(res);
+  notifyWorkspaceDataChanged();
 }
 
 export async function reviewCorrection(
@@ -434,6 +452,7 @@ export async function reviewCorrection(
     body: JSON.stringify({ action, teacher_reply: teacherReply ?? "" }),
   });
   await parseApiJson(res);
+  notifyWorkspaceDataChanged();
 }
 
 export async function assignVariantTasks(
@@ -445,12 +464,14 @@ export async function assignVariantTasks(
     body: JSON.stringify({ tasks }),
   });
   const json = await parseApiJson<ApiJson & { items?: WorkspaceVariantTask[] }>(res);
+  notifyWorkspaceDataChanged();
   return json.items ?? [];
 }
 
 export async function completeVariantTask(taskId: string): Promise<void> {
   const res = await apiFetch(`/api/variant-tasks/${encodeURIComponent(taskId)}/done`, { method: "POST" });
   await parseApiJson(res);
+  notifyWorkspaceDataChanged();
 }
 
 export async function fetchInboxCounts(): Promise<InboxCounts> {

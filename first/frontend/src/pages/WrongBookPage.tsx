@@ -1,10 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
-import { BookMarked, Calculator, CheckCircle2, Languages, Trash2 } from "lucide-react";
 
-import { Navbar } from "@/components/atoms/Navbar";
-import { PageCampusDeco } from "@/components/atoms/PageCampusDeco";
+import { BookOpen, Calculator, CheckCircle2, Languages, Trash2 } from "lucide-react";
+
+import { AppLink } from "@/components/atoms/AppLink";
 import { CUTE_ICON } from "@/components/atoms/cuteIcon";
+import { StudentPageShell } from "@/components/molecules/StudentPageShell";
+import { GRADING_HISTORY_CHANGED } from "@/lib/gradingHistory";
+import type { GradeSubject } from "@/lib/gradeSubject";
+import { WORKSPACE_ASSIGNMENTS_CHANGED } from "@/lib/workspaceAssignmentsSync";
 import {
   dismissWrongBookItem,
   formatWrongBookDate,
@@ -12,10 +15,17 @@ import {
   loadWrongBookItems,
   markWrongBookCorrected,
   subjectLabelCn,
+  WRONG_BOOK_CHANGED,
   type WrongBookItem,
 } from "@/lib/wrongQuestionBook";
 
-type SubjectFilter = "all" | "math" | "english";
+type SubjectFilter = "all" | GradeSubject;
+
+function subjectIcon(subject: GradeSubject) {
+  if (subject === "math") return Calculator;
+  if (subject === "chinese") return BookOpen;
+  return Languages;
+}
 
 function WrongBookRow({
   item,
@@ -26,7 +36,7 @@ function WrongBookRow({
   onDismiss: (id: string) => void;
   onCorrected: (id: string) => void;
 }) {
-  const SubjectIcon = item.subject === "math" ? Calculator : Languages;
+  const SubjectIcon = subjectIcon(item.subject);
   return (
     <li className="rounded-2xl border border-white/70 bg-white/90 p-4 shadow-sm ring-1 ring-primary/10 transition hover:shadow-md">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -107,6 +117,18 @@ export function WrongBookPage() {
     refresh();
   }, [refresh]);
 
+  useEffect(() => {
+    const onChange = () => refresh();
+    window.addEventListener(GRADING_HISTORY_CHANGED, onChange);
+    window.addEventListener(WORKSPACE_ASSIGNMENTS_CHANGED, onChange);
+    window.addEventListener(WRONG_BOOK_CHANGED, onChange);
+    return () => {
+      window.removeEventListener(GRADING_HISTORY_CHANGED, onChange);
+      window.removeEventListener(WORKSPACE_ASSIGNMENTS_CHANGED, onChange);
+      window.removeEventListener(WRONG_BOOK_CHANGED, onChange);
+    };
+  }, [refresh]);
+
   const filtered = useMemo(() => {
     let list = items;
     if (filter !== "all") list = list.filter((i) => i.subject === filter);
@@ -115,113 +137,113 @@ export function WrongBookPage() {
 
   const mathCount = items.filter((i) => i.subject === "math").length;
   const englishCount = items.filter((i) => i.subject === "english").length;
+  const chineseCount = items.filter((i) => i.subject === "chinese").length;
 
   return (
-    <div className="page-bg-hero-stunning relative flex min-h-screen flex-col">
-      <PageCampusDeco />
-      <div className="relative z-10 flex flex-1 flex-col">
-        <Navbar />
-        <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-8 md:px-6 md:py-10">
-          <div className="home-hero-card campus-tape-card notebook-card rounded-[1.35rem] px-5 py-8 shadow-card ring-1 ring-white/90 sm:px-8">
-            <div className="flex flex-wrap items-center gap-3">
-              <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary-tint text-primary ring-1 ring-primary/20">
-                <BookMarked className="h-6 w-6" {...CUTE_ICON} aria-hidden />
-              </span>
-              <div>
-                <h1 className="text-2xl font-extrabold text-ink">我的错题本</h1>
-                <p className="mt-1 text-small text-ink-muted">自动收录批改中标记为「错误」「未作答」的题目，方便课后复习。</p>
-              </div>
+    <StudentPageShell pageTitle="我的错题本">
+      <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-6 md:px-6 md:py-8">
+        <div className="home-hero-card campus-tape-card notebook-card rounded-[1.35rem] px-5 py-8 shadow-card ring-1 ring-white/90 sm:px-8">
+          <div className="flex flex-wrap items-center gap-3">
+            <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-rose-400 to-pink-500 text-white shadow-md ring-2 ring-white/80">
+              <BookOpen className="h-6 w-6" {...CUTE_ICON} aria-hidden />
+            </span>
+            <div>
+              <h1 className="text-2xl font-extrabold text-ink">我的错题本</h1>
+              <p className="mt-1 text-small text-ink-muted">自动收录批改中标记为「错误」「未作答」的题目，方便课后复习。</p>
             </div>
-
-            <div className="mt-6 flex flex-wrap items-center gap-2">
-              <label className="flex items-center gap-2 text-caption font-semibold text-ink-muted">
-                <input
-                  type="checkbox"
-                  checked={showCorrected}
-                  onChange={(e) => setShowCorrected(e.target.checked)}
-                />
-                显示已订正
-              </label>
-              {tags.length > 0 ? (
-                <select
-                  value={tagFilter}
-                  onChange={(e) => setTagFilter(e.target.value)}
-                  className="rounded-full border border-black/[0.08] bg-white px-3 py-1.5 text-caption font-bold text-ink-muted"
-                >
-                  <option value="">全部知识点</option>
-                  {tags.map((t) => (
-                    <option key={t} value={t}>
-                      {t}
-                    </option>
-                  ))}
-                </select>
-              ) : null}
-            </div>
-
-            <div className="mt-4 flex flex-wrap gap-2">
-              {(
-                [
-                  { key: "all" as const, label: `全部 (${items.length})` },
-                  { key: "math" as const, label: `数学 (${mathCount})` },
-                  { key: "english" as const, label: `英语 (${englishCount})` },
-                ] as const
-              ).map(({ key, label }) => (
-                <button
-                  key={key}
-                  type="button"
-                  onClick={() => setFilter(key)}
-                  className={`rounded-full px-3 py-1.5 text-caption font-bold transition ${
-                    filter === key
-                      ? "bg-primary text-white shadow-sm"
-                      : "border border-black/[0.08] bg-white text-ink-muted hover:border-primary/30"
-                  }`}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-
-            {filtered.length === 0 ? (
-              <div className="mt-10 rounded-2xl border border-dashed border-primary/25 bg-primary-tint/40 px-6 py-12 text-center">
-                <p className="text-body font-bold text-ink">还没有错题记录</p>
-                <p className="mt-2 text-small text-ink-muted">完成一次数学或英语批改后，错题会自动出现在这里。</p>
-                <div className="mt-6 flex flex-wrap justify-center gap-3">
-                  <Link to="/math" className="btn-brand-primary inline-flex min-h-10 items-center rounded-full px-5 text-small font-bold">
-                    去批改数学
-                  </Link>
-                  <Link
-                    to="/english"
-                    className="inline-flex min-h-10 items-center rounded-full border border-primary/30 bg-white px-5 text-small font-bold text-ink-navActive hover:bg-primary-tint"
-                  >
-                    去批改英语
-                  </Link>
-                </div>
-              </div>
-            ) : (
-              <ul className="mt-6 space-y-4">
-                {filtered.map((item) => (
-                  <WrongBookRow
-                    key={item.id}
-                    item={item}
-                    onDismiss={(id) => {
-                      dismissWrongBookItem(id);
-                      refresh();
-                    }}
-                    onCorrected={(id) => {
-                      markWrongBookCorrected(id);
-                      refresh();
-                    }}
-                  />
-                ))}
-              </ul>
-            )}
-
-            <p className="mt-8 text-center text-caption text-ink-subtle">
-              移除仅隐藏本条，不会删除「批改历史」中的原始记录。
-            </p>
           </div>
-        </main>
-      </div>
-    </div>
+
+          <div className="mt-6 flex flex-wrap items-center gap-2">
+            <label className="flex items-center gap-2 text-caption font-semibold text-ink-muted">
+              <input type="checkbox" checked={showCorrected} onChange={(e) => setShowCorrected(e.target.checked)} />
+              显示已订正
+            </label>
+            {tags.length > 0 ? (
+              <select
+                value={tagFilter}
+                onChange={(e) => setTagFilter(e.target.value)}
+                className="rounded-full border border-black/[0.08] bg-white px-3 py-1.5 text-caption font-bold text-ink-muted"
+              >
+                <option value="">全部知识点</option>
+                {tags.map((t) => (
+                  <option key={t} value={t}>
+                    {t}
+                  </option>
+                ))}
+              </select>
+            ) : null}
+          </div>
+
+          <div className="mt-4 flex flex-wrap gap-2">
+            {(
+              [
+                { key: "all" as const, label: `全部 (${items.length})` },
+                { key: "math" as const, label: `数学 (${mathCount})` },
+                { key: "chinese" as const, label: `语文 (${chineseCount})` },
+                { key: "english" as const, label: `英语 (${englishCount})` },
+              ] as const
+            ).map(({ key, label }) => (
+              <button
+                key={key}
+                type="button"
+                onClick={() => setFilter(key)}
+                className={`rounded-full px-3 py-1.5 text-caption font-bold transition ${
+                  filter === key
+                    ? "bg-primary text-white shadow-sm"
+                    : "border border-black/[0.08] bg-white text-ink-muted hover:border-primary/30"
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+
+          {filtered.length === 0 ? (
+            <div className="mt-10 rounded-2xl border border-dashed border-primary/25 bg-primary-tint/40 px-6 py-12 text-center">
+              <p className="text-body font-bold text-ink">还没有错题记录</p>
+              <p className="mt-2 text-small text-ink-muted">完成一次作业批改后，错题会自动出现在这里。</p>
+              <div className="mt-6 flex flex-wrap justify-center gap-3">
+                <AppLink to="/math" className="btn-brand-primary inline-flex min-h-10 items-center rounded-full px-5 text-small font-bold">
+                  去批改数学
+                </AppLink>
+                <AppLink
+                  to="/chinese"
+                  className="inline-flex min-h-10 items-center rounded-full border border-amber-300/80 bg-amber-50 px-5 text-small font-bold text-amber-950 hover:bg-amber-100"
+                >
+                  去批改语文
+                </AppLink>
+                <AppLink
+                  to="/english"
+                  className="inline-flex min-h-10 items-center rounded-full border border-primary/30 bg-white px-5 text-small font-bold text-ink-navActive hover:bg-primary-tint"
+                >
+                  去批改英语
+                </AppLink>
+              </div>
+            </div>
+          ) : (
+            <ul className="mt-6 space-y-4">
+              {filtered.map((item) => (
+                <WrongBookRow
+                  key={item.id}
+                  item={item}
+                  onDismiss={(id) => {
+                    dismissWrongBookItem(id);
+                    refresh();
+                  }}
+                  onCorrected={(id) => {
+                    markWrongBookCorrected(id);
+                    refresh();
+                  }}
+                />
+              ))}
+            </ul>
+          )}
+
+          <p className="mt-8 text-center text-caption text-ink-subtle">
+            移除仅隐藏本条，不会删除「批改历史」中的原始记录。
+          </p>
+        </div>
+      </main>
+    </StudentPageShell>
   );
 }

@@ -1,4 +1,5 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
+import { createPortal } from "react-dom";
 import {
   BarChart3,
   KeyRound,
@@ -31,6 +32,8 @@ type WorkspaceTaskCardProps = {
   onReleaseAnswer: () => void;
   onToggleLateSubmit: () => void;
   onPublishDraft: () => void;
+  onGoGrading: () => void;
+  onViewAnalytics: () => void;
 };
 
 const btnPrimary =
@@ -54,13 +57,48 @@ export function WorkspaceTaskCard({
   onReleaseAnswer,
   onToggleLateSubmit,
   onPublishDraft,
+  onGoGrading,
+  onViewAnalytics,
 }: WorkspaceTaskCardProps) {
-  const menuRef = useRef<HTMLDivElement>(null);
+  const menuWrapRef = useRef<HTMLDivElement>(null);
+  const menuBtnRef = useRef<HTMLButtonElement>(null);
+  const menuPanelRef = useRef<HTMLDivElement>(null);
+  const [menuStyle, setMenuStyle] = useState<CSSProperties | null>(null);
+
+  const placeMenu = () => {
+    const btn = menuBtnRef.current;
+    if (!btn) return;
+    const rect = btn.getBoundingClientRect();
+    setMenuStyle({
+      position: "fixed",
+      top: rect.bottom + 4,
+      left: Math.max(8, rect.right - 168),
+      zIndex: 200,
+      minWidth: "10.5rem",
+    });
+  };
+
+  useLayoutEffect(() => {
+    if (!menuOpen) {
+      setMenuStyle(null);
+      return;
+    }
+    placeMenu();
+    const onReflow = () => placeMenu();
+    window.addEventListener("resize", onReflow);
+    window.addEventListener("scroll", onReflow, true);
+    return () => {
+      window.removeEventListener("resize", onReflow);
+      window.removeEventListener("scroll", onReflow, true);
+    };
+  }, [menuOpen]);
 
   useEffect(() => {
     if (!menuOpen) return;
     const onDoc = (e: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) onMenuClose();
+      const t = e.target as Node;
+      if (menuWrapRef.current?.contains(t) || menuPanelRef.current?.contains(t)) return;
+      onMenuClose();
     };
     document.addEventListener("mousedown", onDoc);
     return () => document.removeEventListener("mousedown", onDoc);
@@ -70,7 +108,7 @@ export function WorkspaceTaskCard({
   const progress = `${a.submission_count ?? 0} 已录 · ${a.published_count ?? 0} 已下发`;
 
   return (
-    <li className="rounded-2xl border border-black/[0.06] bg-white/95 shadow-sm">
+    <li className="glass-panel rounded-2xl shadow-sm">
       <div className="flex items-start justify-between gap-3 p-4 pb-3">
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[0.65rem] font-semibold text-ink-muted">
@@ -89,8 +127,9 @@ export function WorkspaceTaskCard({
           ) : null}
         </div>
         {a.status === "published" ? (
-          <div className="relative shrink-0" ref={menuRef}>
+          <div className="relative shrink-0" ref={menuWrapRef}>
             <button
+              ref={menuBtnRef}
               type="button"
               disabled={busy}
               aria-expanded={menuOpen}
@@ -101,71 +140,76 @@ export function WorkspaceTaskCard({
               <MoreHorizontal className="h-4 w-4" {...CUTE_ICON} aria-hidden />
               <span className="sr-only">更多操作</span>
             </button>
-            {menuOpen ? (
-              <div
-                role="menu"
-                className="absolute right-0 z-20 mt-1 min-w-[10.5rem] rounded-xl border border-black/[0.08] bg-white py-1 shadow-lg ring-1 ring-black/[0.04]"
-              >
-                <button
-                  type="button"
-                  role="menuitem"
-                  disabled={busy}
-                  onClick={onEdit}
-                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-caption font-semibold text-ink hover:bg-gray-50"
-                >
-                  <Pencil className="h-3.5 w-3.5" {...CUTE_ICON} aria-hidden />
-                  编辑
-                </button>
-                {mode === "exam" ? (
-                  <>
+            {menuOpen && menuStyle
+              ? createPortal(
+                  <div
+                    ref={menuPanelRef}
+                    role="menu"
+                    style={menuStyle}
+                    className="rounded-xl border border-black/[0.08] bg-white py-1 shadow-2xl ring-1 ring-black/[0.06]"
+                  >
                     <button
                       type="button"
                       role="menuitem"
                       disabled={busy}
-                      onClick={onPublishPending}
+                      onClick={onEdit}
                       className="flex w-full items-center gap-2 px-3 py-2 text-left text-caption font-semibold text-ink hover:bg-gray-50"
                     >
-                      <Send className="h-3.5 w-3.5" {...CUTE_ICON} aria-hidden />
-                      批量下发成绩
+                      <Pencil className="h-3.5 w-3.5" {...CUTE_ICON} aria-hidden />
+                      编辑
                     </button>
-                    {a.hide_answer_from_student ? (
+                    {mode === "exam" ? (
+                      <>
+                        <button
+                          type="button"
+                          role="menuitem"
+                          disabled={busy}
+                          onClick={onPublishPending}
+                          className="flex w-full items-center gap-2 px-3 py-2 text-left text-caption font-semibold text-ink hover:bg-gray-50"
+                        >
+                          <Send className="h-3.5 w-3.5" {...CUTE_ICON} aria-hidden />
+                          批量下发成绩
+                        </button>
+                        {a.hide_answer_from_student ? (
+                          <button
+                            type="button"
+                            role="menuitem"
+                            disabled={busy}
+                            onClick={onReleaseAnswer}
+                            className="flex w-full items-center gap-2 px-3 py-2 text-left text-caption font-semibold text-ink hover:bg-gray-50"
+                          >
+                            <KeyRound className="h-3.5 w-3.5" {...CUTE_ICON} aria-hidden />
+                            {a.answer_released ? "取消开放答案" : "开放答案"}
+                          </button>
+                        ) : null}
+                      </>
+                    ) : null}
+                    {a.is_overdue ? (
                       <button
                         type="button"
                         role="menuitem"
                         disabled={busy}
-                        onClick={onReleaseAnswer}
+                        onClick={onToggleLateSubmit}
                         className="flex w-full items-center gap-2 px-3 py-2 text-left text-caption font-semibold text-ink hover:bg-gray-50"
                       >
-                        <KeyRound className="h-3.5 w-3.5" {...CUTE_ICON} aria-hidden />
-                        {a.answer_released ? "取消开放答案" : "开放答案"}
+                        {a.allow_late_submit ? "关闭补交" : "开放补交"}
                       </button>
                     ) : null}
-                  </>
-                ) : null}
-                {a.is_overdue ? (
-                  <button
-                    type="button"
-                    role="menuitem"
-                    disabled={busy}
-                    onClick={onToggleLateSubmit}
-                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-caption font-semibold text-ink hover:bg-gray-50"
-                  >
-                    {a.allow_late_submit ? "关闭补交" : "开放补交"}
-                  </button>
-                ) : null}
-                <div className="my-1 border-t border-black/[0.06]" />
-                <button
-                  type="button"
-                  role="menuitem"
-                  disabled={busy}
-                  onClick={onDelete}
-                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-caption font-semibold text-red-600 hover:bg-red-50"
-                >
-                  <Trash2 className="h-3.5 w-3.5" {...CUTE_ICON} aria-hidden />
-                  删除
-                </button>
-              </div>
-            ) : null}
+                    <div className="my-1 border-t border-black/[0.06]" />
+                    <button
+                      type="button"
+                      role="menuitem"
+                      disabled={busy}
+                      onClick={onDelete}
+                      className="flex w-full items-center gap-2 px-3 py-2 text-left text-caption font-semibold text-red-600 hover:bg-red-50"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" {...CUTE_ICON} aria-hidden />
+                      删除
+                    </button>
+                  </div>,
+                  document.body,
+                )
+              : null}
           </div>
         ) : null}
       </div>
@@ -183,6 +227,17 @@ export function WorkspaceTaskCard({
 
       {a.status === "published" ? (
         <div className="flex flex-wrap gap-2 border-t border-black/[0.05] bg-gray-50/50 px-4 py-3">
+          <button
+            type="button"
+            disabled={busy}
+            onClick={onGoGrading}
+            className={`${btnGhost} border-primary/20 text-[#006D41]`}
+          >
+            去批改
+          </button>
+          <button type="button" disabled={busy} onClick={onViewAnalytics} className={btnGhost}>
+            本任务学情
+          </button>
           {mode === "exam" ? (
             <>
               <button

@@ -19,7 +19,14 @@ export function glassOpacityToCssVars(opacity: number): Record<string, string> {
   const blurPx = Math.round(2 + p * 20);
   const scrimBlurPx = Math.round(1 + p * 14);
   const scrim = 0.006 + p * 0.26;
+  /** 教师工作台侧栏：略实于内容卡片，保证导航可读 */
+  const sidebar = 0.05 + p * 0.9;
+  const navHover = 0.12 + p * 0.72;
+  const moduleCard = 0.03 + p * 0.78;
   return {
+    "--glass-sidebar-alpha": sidebar.toFixed(3),
+    "--glass-sidebar-module-alpha": moduleCard.toFixed(3),
+    "--glass-nav-hover-alpha": navHover.toFixed(3),
     "--glass-panel-alpha": panel.toFixed(3),
     "--glass-inner-alpha": inner.toFixed(3),
     "--glass-scrim-alpha": scrim.toFixed(3),

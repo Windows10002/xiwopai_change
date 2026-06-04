@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import {
   GraduationCap,
   Loader2,
@@ -36,6 +37,15 @@ import {
   type WorkspaceAssignment,
   type WorkspaceSubmission,
 } from "@/lib/workspaceApi";
+import { DeleteAssignmentConfirmDialog } from "@/components/molecules/DeleteAssignmentConfirmDialog";
+import {
+  assignmentDeleteNeedsSecondStep,
+  type AssignmentDeleteStep,
+} from "@/lib/confirmDeleteAssignment";
+import { emitWorkspaceAssignmentsChanged } from "@/lib/workspaceAssignmentsSync";
+import { syncWrongBookFromSubmissions } from "@/lib/workspaceWrongBookSync";
+import { analyticsPath, gradingPath, parseWorkspaceTab, type LinkAssignmentState } from "@/lib/teacherRoutes";
+import { useAppNavigate } from "@/hooks/useAppNavigate";
 
 const SUBJECT_CN = { math: "数学", english: "英语", chinese: "语文" } as const;
 
@@ -60,7 +70,18 @@ function isExamTask(a: WorkspaceAssignment): boolean {
 }
 
 export function WorkspacePage() {
-  const [tab, setTab] = useState<WorkspaceTabId>("homework");
+  const navigate = useAppNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const tab = parseWorkspaceTab(searchParams.get("tab"));
+  const setTab = useCallback(
+    (next: WorkspaceTabId) => {
+      const params = new URLSearchParams(searchParams);
+      if (next === "homework") params.delete("tab");
+      else params.set("tab", next);
+      setSearchParams(params, { replace: true });
+    },
+    [searchParams, setSearchParams],
+  );
   const [assignments, setAssignments] = useState<WorkspaceAssignment[]>([]);
   const [inbox, setInbox] = useState<WorkspaceSubmission[]>([]);
   const [counts, setCounts] = useState({ corrections_pending: 0, pending_review: 0, unpublished_graded: 0 });
@@ -78,7 +99,8 @@ export function WorkspacePage() {
   const [examUploadOpen, setExamUploadOpen] = useState(false);
   const [examUploadAssignment, setExamUploadAssignment] = useState<WorkspaceAssignment | null>(null);
   const [cardMenuId, setCardMenuId] = useState<string | null>(null);
-
+  const [deleteTarget, setDeleteTarget] = useState<WorkspaceAssignment | null>(null);
+  const [deleteStep, setDeleteStep] = useState<AssignmentDeleteStep>(1);
   useEffect(() => {
     setCardMenuId(null);
   }, [tab]);
@@ -90,10 +112,12 @@ export function WorkspacePage() {
       setAssignments(a);
       setInbox(inboxData.items);
       setCounts(inboxData.counts);
+      syncWrongBookFromSubmissions(inboxData.items);
     } catch (e) {
       setToast(e instanceof Error ? e.message : "加载失败");
     } finally {
       setLoading(false);
+      emitWorkspaceAssignmentsChanged();
     }
   }, []);
 
@@ -206,12 +230,29 @@ export function WorkspacePage() {
     }
   };
 
-  const handleDeleteTask = async (a: WorkspaceAssignment) => {
-    if (!window.confirm(`确定删除任务「${a.title}」？`)) return;
+  const openDeleteConfirm = (a: WorkspaceAssignment) => {
+    setDeleteTarget(a);
+    setDeleteStep(1);
+  };
+
+  const closeDeleteConfirm = () => {
+    if (busy) return;
+    setDeleteTarget(null);
+    setDeleteStep(1);
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!deleteTarget) return;
+    if (deleteStep === 1 && assignmentDeleteNeedsSecondStep(deleteTarget)) {
+      setDeleteStep(2);
+      return;
+    }
     setBusy(true);
     try {
-      await deleteAssignment(a.id);
+      await deleteAssignment(deleteTarget.id);
       setToast("任务已删除");
+      setDeleteTarget(null);
+      setDeleteStep(1);
       await refresh();
     } catch (e) {
       setToast(e instanceof Error ? e.message : "删除失败");
@@ -393,12 +434,47 @@ export function WorkspacePage() {
     </div>
   );
 
+  const goGrading = (a: WorkspaceAssignment) => {
+    navigate(gradingPath(a.subject), {
+      state: {
+        linkAssignment: {
+          id: a.id,
+          title: a.title,
+          subject: a.subject,
+          className: a.class_name,
+        },
+      } satisfies LinkAssignmentState,
+    });
+  };
+
+  const goAnalytics = (a: WorkspaceAssignment) => {
+    navigate(analyticsPath({ tab: "student", subject: a.subject, task: a.title }));
+  };
+
+  const handlePublishAllDrafts = async (drafts: WorkspaceAssignment[]) => {
+    if (drafts.length === 0) return;
+    setBusy(true);
+    try {
+      for (const d of drafts) {
+        await publishAssignment(d.id);
+      }
+      setToast(`已发布 ${drafts.length} 个草稿`);
+      await refresh();
+    } catch (e) {
+      setToast(e instanceof Error ? e.message : "批量发布失败");
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const renderTaskCard = (a: WorkspaceAssignment, mode: "homework" | "exam") => (
     <WorkspaceTaskCard
       key={a.id}
       assignment={a}
       mode={mode}
       busy={busy}
+      onGoGrading={() => goGrading(a)}
+      onViewAnalytics={() => goAnalytics(a)}
       menuOpen={cardMenuId === a.id}
       onMenuToggle={() => setCardMenuId((id) => (id === a.id ? null : a.id))}
       onMenuClose={() => setCardMenuId(null)}
@@ -408,7 +484,7 @@ export function WorkspacePage() {
       }}
       onDelete={() => {
         setCardMenuId(null);
-        void handleDeleteTask(a);
+        openDeleteConfirm(a);
       }}
       onReport={() => {
         setCardMenuId(null);
@@ -494,7 +570,19 @@ export function WorkspacePage() {
                 ) : null}
                 {homeworkDrafts.length > 0 ? (
                   <div className="mt-6">
-                    <p className="mb-3 text-caption font-bold text-ink-muted">草稿</p>
+                    <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                      <p className="text-caption font-bold text-ink-muted">草稿 ({homeworkDrafts.length})</p>
+                      {homeworkDrafts.length > 1 ? (
+                        <button
+                          type="button"
+                          disabled={busy}
+                          onClick={() => void handlePublishAllDrafts(homeworkDrafts)}
+                          className="rounded-full border border-primary/30 bg-primary-tint px-3 py-1 text-caption font-bold text-[#006D41] hover:bg-primary-tint/80 disabled:opacity-50"
+                        >
+                          全部发布
+                        </button>
+                      ) : null}
+                    </div>
                     <ul className="space-y-3">{homeworkDrafts.map((a) => renderTaskCard(a, "homework"))}</ul>
                   </div>
                 ) : null}
@@ -530,7 +618,19 @@ export function WorkspacePage() {
                 ) : null}
                 {examDrafts.length > 0 ? (
                   <div className="mt-6">
-                    <p className="mb-3 text-caption font-bold text-ink-muted">草稿</p>
+                    <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                      <p className="text-caption font-bold text-ink-muted">草稿 ({examDrafts.length})</p>
+                      {examDrafts.length > 1 ? (
+                        <button
+                          type="button"
+                          disabled={busy}
+                          onClick={() => void handlePublishAllDrafts(examDrafts)}
+                          className="rounded-full border border-primary/30 bg-primary-tint px-3 py-1 text-caption font-bold text-[#006D41] hover:bg-primary-tint/80 disabled:opacity-50"
+                        >
+                          全部发布
+                        </button>
+                      ) : null}
+                    </div>
                     <ul className="space-y-3">{examDrafts.map((a) => renderTaskCard(a, "exam"))}</ul>
                   </div>
                 ) : null}
@@ -544,9 +644,10 @@ export function WorkspacePage() {
                 <Loader2 className="h-6 w-6 animate-spin text-ink-muted" {...CUTE_ICON} aria-hidden />
               </div>
             ) : pendingReview.length === 0 && correctionItems.length === 0 ? (
-              <p className="rounded-2xl border border-dashed border-primary/25 bg-white/80 py-12 text-center text-caption text-ink-muted">
-                暂无待审阅，一切正常
-              </p>
+              <div className="rounded-2xl border border-dashed border-primary/25 bg-white/80 py-12 text-center">
+                <p className="text-caption font-semibold text-ink">暂无待审阅，一切正常</p>
+                <p className="mt-2 text-caption text-ink-muted">学生交卷后会出现在此，可审阅并下发成绩</p>
+              </div>
             ) : (
               <div className="space-y-6">
                 {[...pendingByAssignment.entries()].map(([assignmentId, subs]) => {
@@ -671,6 +772,15 @@ export function WorkspacePage() {
           busy={busy}
           editing={editing}
           onSubmit={handleSubmitTask}
+        />
+
+        <DeleteAssignmentConfirmDialog
+          open={Boolean(deleteTarget)}
+          assignment={deleteTarget}
+          step={deleteStep}
+          busy={busy}
+          onCancel={closeDeleteConfirm}
+          onConfirm={() => void handleDeleteConfirm()}
         />
 
         {toast ? (

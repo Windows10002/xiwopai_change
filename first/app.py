@@ -39,6 +39,8 @@ def create_app() -> Flask:
     from routes.api_auth import auth_bp
     from routes.api_disputes import disputes_bp
     from routes.api_feedback import feedback_bp
+    from routes.api_product_feedback import product_feedback_bp
+    from routes.api_assistant import assistant_bp
     from routes.api_grade import grade_bp
     from routes.api_health import health_bp
     from routes.api_insights import insights_bp
@@ -46,7 +48,19 @@ def create_app() -> Flask:
     from routes.api_workspace import workspace_bp
     from routes.spa import spa_bp
 
-    for bp in (auth_bp, grade_bp, feedback_bp, insights_bp, disputes_bp, workspace_bp, health_bp, uploads_bp, spa_bp):
+    for bp in (
+        auth_bp,
+        grade_bp,
+        feedback_bp,
+        product_feedback_bp,
+        assistant_bp,
+        insights_bp,
+        disputes_bp,
+        workspace_bp,
+        health_bp,
+        uploads_bp,
+        spa_bp,
+    ):
         app.register_blueprint(bp)
 
     return app

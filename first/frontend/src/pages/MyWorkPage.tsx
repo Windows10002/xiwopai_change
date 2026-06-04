@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import {
   BookOpen,
   Calculator,
@@ -10,8 +11,8 @@ import {
   Send,
 } from "lucide-react";
 
-import { Navbar } from "@/components/atoms/Navbar";
-import { PageCampusDeco } from "@/components/atoms/PageCampusDeco";
+import { AppLink } from "@/components/atoms/AppLink";
+import { StudentPageShell } from "@/components/molecules/StudentPageShell";
 import { PrimaryButton } from "@/components/atoms/PrimaryButton";
 import { CUTE_ICON } from "@/components/atoms/cuteIcon";
 import { HomeworkPreview } from "@/components/atoms/HomeworkPreview";
@@ -35,6 +36,9 @@ import { AuthenticatedImage } from "@/components/molecules/AuthenticatedImage";
 import { assignmentDueLabel, submitBlockedReason } from "@/lib/assignmentDeadline";
 import { subjectLabelCn } from "@/lib/gradeSubject";
 import { syncWrongBookFromSubmissions } from "@/lib/workspaceWrongBookSync";
+import { useWorkspaceAssignmentsSync } from "@/hooks/useWorkspaceAssignmentsSync";
+import { syncRewardsFromSubmissions } from "@/lib/studentRewards";
+import { parseMyWorkTab, todoPath, type MyWorkTabId } from "@/lib/studentRoutes";
 
 function formatWhen(iso: string) {
   if (!iso) return "—";
@@ -63,8 +67,19 @@ function statusLabel(status: string) {
 }
 
 export function MyWorkPage() {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const tab = parseMyWorkTab(searchParams.get("tab"));
+  const setTab = useCallback(
+    (next: MyWorkTabId) => {
+      const params = new URLSearchParams(searchParams);
+      if (next === "todo") params.delete("tab");
+      else params.set("tab", next);
+      setSearchParams(params, { replace: true });
+    },
+    [searchParams, setSearchParams],
+  );
+
   const [profileName, setProfileName] = useState(() => loadStudentProfileName());
-  const [tab, setTab] = useState<"todo" | "work" | "variants">("todo");
   const [todo, setTodo] = useState<WorkspaceAssignment[]>([]);
   const [items, setItems] = useState<WorkspaceSubmission[]>([]);
   const [pendingRelease, setPendingRelease] = useState<StudentPendingRelease[]>([]);
@@ -97,6 +112,7 @@ export function MyWorkPage() {
       setPendingRelease(workData.pending_release);
       setVariants(workData.variant_tasks);
       syncWrongBookFromSubmissions(workData.items);
+      syncRewardsFromSubmissions(workData.items);
       if (selectedId) {
         const hit = workData.items.find((i) => i.id === selectedId);
         if (hit) setSelected(hit);
@@ -115,6 +131,8 @@ export function MyWorkPage() {
   useEffect(() => {
     void refresh();
   }, [refresh]);
+
+  useWorkspaceAssignmentsSync(refresh);
 
   const detail = useMemo(() => (selected ? submissionToDetail(selected) : null), [selected]);
 
@@ -200,11 +218,8 @@ export function MyWorkPage() {
   };
 
   return (
-    <div className="page-bg-hero-stunning relative flex min-h-screen flex-col">
-      <PageCampusDeco />
-      <div className="relative z-10 flex flex-1 flex-col">
-        <Navbar />
-        <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-6 px-4 py-8 md:px-6 md:py-10">
+    <StudentPageShell pageTitle="我的作业" mainClassName="max-w-6xl">
+        <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-6 px-4 py-6 md:px-6 md:py-8">
           <div>
             <h1 className="text-2xl font-extrabold text-ink">我的作业</h1>
             <p className="mt-2 max-w-2xl text-small text-ink-muted">
@@ -286,7 +301,13 @@ export function MyWorkPage() {
                 <li className="rounded-2xl border border-dashed border-primary/25 bg-white/80 py-12 text-center">
                   <ClipboardList className="mx-auto h-10 w-10 text-primary/50" {...CUTE_ICON} aria-hidden />
                   <p className="mt-4 text-small font-semibold text-ink">暂无待办任务</p>
-                  <p className="mt-1 text-caption text-ink-muted">教师发布任务后会出现在这里，或前往「批改记录」查看已交作业</p>
+                  <p className="mt-1 text-caption text-ink-muted">
+                    教师发布任务后会出现在这里，也可前往
+                    <AppLink to={todoPath()} className="mx-1 font-bold text-brand">
+                      待办任务
+                    </AppLink>
+                    页提交
+                  </p>
                 </li>
               ) : (
                 todo.map((a) => {
@@ -506,7 +527,6 @@ export function MyWorkPage() {
             </p>
           ) : null}
         </main>
-      </div>
-    </div>
+    </StudentPageShell>
   );
 }

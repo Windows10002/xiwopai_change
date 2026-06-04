@@ -76,4 +76,5 @@ export const DEV_PARALLEL_LOGIN_SLOTS: Array<{ slot: Exclude<AuthSlot, "main">; 
   { slot: "teacher", hint: "教师 13800138001" },
   { slot: "student", hint: "学生 13800138003（张三）" },
   { slot: "parent", hint: "家长 13800138002" },
+  { slot: "admin", hint: "教务 13800138004" },
 ];

@@ -16,6 +16,7 @@ except ImportError:
 UPLOAD_FOLDER = BASE_DIR / "uploads"
 FRONTEND_DIST = BASE_DIR / "frontend" / "dist"
 GRADING_FEEDBACK_LOG = BASE_DIR / "grading_feedback.jsonl"
+PRODUCT_FEEDBACK_LOG = BASE_DIR / "product_feedback.jsonl"
 GRADING_DISPUTES_DB = BASE_DIR / "grading_disputes.db"
 WORKSPACE_DB = BASE_DIR / "workspace.db"
 
@@ -35,3 +36,18 @@ FLASK_DEBUG = os.getenv("FLASK_DEBUG", "0").strip().lower() in {"1", "true", "ye
 FLASK_PORT = int(os.getenv("FLASK_PORT", "50003"))
 
 BATCH_GRADE_CONCURRENCY = max(1, min(4, int(os.getenv("BATCH_GRADE_CONCURRENCY", "2"))))
+
+# π 助手 LLM（Agnes OpenAI 兼容 API，与批改 DashScope 分离）
+AGNES_API_BASE = os.getenv("AGNES_API_BASE", "https://apihub.agnes-ai.com/v1").rstrip("/")
+AGNES_ASSISTANT_MODEL = os.getenv("AGNES_ASSISTANT_MODEL", "agnes-2.0-flash")
+AGNES_API_KEY = os.getenv("AGNES_API_KEY", "").strip()
+
+ASSISTANT_LLM_MAX_ROUNDS_DEFAULT = max(5, min(30, int(os.getenv("ASSISTANT_LLM_MAX_ROUNDS", "20"))))
+ASSISTANT_LLM_MAX_ROUNDS_TEACHER = max(
+    ASSISTANT_LLM_MAX_ROUNDS_DEFAULT,
+    min(40, int(os.getenv("ASSISTANT_LLM_MAX_ROUNDS_TEACHER", "25"))),
+)
+ASSISTANT_LLM_MAX_ROUNDS_ADMIN = max(
+    ASSISTANT_LLM_MAX_ROUNDS_DEFAULT,
+    min(40, int(os.getenv("ASSISTANT_LLM_MAX_ROUNDS_ADMIN", str(ASSISTANT_LLM_MAX_ROUNDS_TEACHER)))),
+)

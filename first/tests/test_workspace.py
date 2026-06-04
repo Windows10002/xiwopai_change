@@ -215,6 +215,42 @@ class WorkspaceApiTests(unittest.TestCase):
         items = r4.get_json().get("items", [])
         self.assertFalse(any(i["id"] == aid for i in items))
 
+    def test_delete_assignment_with_submissions(self):
+        r = self.client.post(
+            "/api/assignments",
+            headers=self.teacher_headers,
+            json={
+                "subject": "math",
+                "title": "有提交待删",
+                "class_name": "七年级1班",
+                "due_at": "2099-12-31T23:59:59Z",
+                "target_student_names": ["张三"],
+                "publish": True,
+            },
+        )
+        self.assertEqual(r.status_code, 200)
+        aid = r.get_json()["assignment"]["id"]
+
+        store = self.app.extensions.get("workspace_store")
+        self.assertIsNotNone(store)
+        store.create_submission(
+            assignment_id=aid,
+            teacher_sub="13800138000",
+            student_name="张三",
+            submitted_by_role="student",
+            subject="math",
+            file_name="hw.jpg",
+            image_filename="hw.jpg",
+            image_url="/uploads/hw.jpg",
+        )
+
+        r_del = self.client.delete(f"/api/assignments/{aid}", headers=self.teacher_headers)
+        self.assertEqual(r_del.status_code, 200, r_del.get_json())
+
+        r_list = self.client.get("/api/assignments", headers=self.teacher_headers)
+        items = r_list.get_json().get("items", [])
+        self.assertFalse(any(i["id"] == aid for i in items))
+
     def test_admin_list_all_assignments(self):
         self.client.post(
             "/api/assignments",

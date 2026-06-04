@@ -4,6 +4,7 @@ import { ImagePlus, Loader2, Plus, Users, X } from "lucide-react";
 import { CUTE_ICON } from "@/components/atoms/cuteIcon";
 import { PrimaryButton } from "@/components/atoms/PrimaryButton";
 import { AppDialog, APP_DIALOG_PANEL } from "@/components/molecules/AppDialog";
+import { AuthenticatedImage } from "@/components/molecules/AuthenticatedImage";
 import { DueDateTimeField, type DueDateTimeFieldHandle } from "@/components/molecules/DueDateTimeField";
 import {
   loadStudentRoster,
@@ -300,8 +301,17 @@ export function ExamPublishModal({ open, onClose, busy, editing, onSubmit }: Exa
             }}
           />
           {answerKeyPreview ? (
-            <div className="relative overflow-hidden rounded-xl border border-black/[0.1]">
-              <img src={answerKeyPreview} alt="答案预览" className="max-h-40 w-full object-contain" />
+            <div className="relative overflow-hidden rounded-xl border border-black/[0.1] bg-surface-page">
+              {answerKeyPreview.startsWith("blob:") ? (
+                <img src={answerKeyPreview} alt="标准答案预览" className="max-h-48 w-full object-contain" />
+              ) : (
+                <AuthenticatedImage
+                  src={answerKeyPreview}
+                  alt="标准答案预览"
+                  className="max-h-48 w-full object-contain"
+                  wrapperClassName="min-h-[6rem]"
+                />
+              )}
               <button
                 type="button"
                 onClick={() => {

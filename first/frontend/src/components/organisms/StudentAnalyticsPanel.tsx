@@ -5,9 +5,10 @@ import { SimpleLineChart } from "@/components/molecules/SimpleLineChart";
 import { SimpleRadarChart } from "@/components/molecules/SimpleRadarChart";
 import { CUTE_ICON } from "@/components/atoms/cuteIcon";
 import { BatchInsightsModal } from "@/components/organisms/BatchInsightsModal";
-import { loadGradingHistory } from "@/lib/gradingHistory";
+import { loadGradingHistory, type GradingHistoryEntry } from "@/lib/gradingHistory";
 import {
   filterHistoryByStudent,
+  filterHistoryByTask,
   formatStudentDate,
   historyToInsightEntries,
   listStudentProfiles,
@@ -15,12 +16,21 @@ import {
   UNLABELED_STUDENT_KEY,
 } from "@/lib/studentLearningAnalytics";
 
-const SUBJECT_LABEL = { all: "全部学科", math: "数学", english: "英语" } as const;
+const SUBJECT_LABEL = { all: "全部学科", math: "数学", english: "英语", chinese: "语文" } as const;
 
-/** 学生个性化学情（嵌入班级看板） */
-export function StudentAnalyticsPanel() {
+type StudentAnalyticsPanelProps = {
+  historyEntries?: GradingHistoryEntry[];
+  taskFilter?: string;
+};
+
+/** 学生个性化学情（嵌入学情中心） */
+export function StudentAnalyticsPanel({ historyEntries, taskFilter = "" }: StudentAnalyticsPanelProps = {}) {
   const [historyVersion, setHistoryVersion] = useState(0);
-  const profiles = useMemo(() => listStudentProfiles(loadGradingHistory()), [historyVersion]);
+  const scopedHistory = useMemo(() => {
+    const base = historyEntries ?? loadGradingHistory();
+    return taskFilter ? filterHistoryByTask(taskFilter, base) : base;
+  }, [historyEntries, taskFilter, historyVersion]);
+  const profiles = useMemo(() => listStudentProfiles(scopedHistory), [scopedHistory]);
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [subjectFilter, setSubjectFilter] = useState<SubjectFilter>("all");
   const [insightsOpen, setInsightsOpen] = useState(false);
@@ -31,8 +41,8 @@ export function StudentAnalyticsPanel() {
 
   const entries = useMemo(() => {
     if (!activeKey) return [];
-    return filterHistoryByStudent(activeKey, subjectFilter);
-  }, [activeKey, subjectFilter, historyVersion]);
+    return filterHistoryByStudent(activeKey, subjectFilter, scopedHistory);
+  }, [activeKey, subjectFilter, scopedHistory]);
 
   const insightEntries = useMemo(() => historyToInsightEntries(entries), [entries]);
 
@@ -74,10 +84,9 @@ export function StudentAnalyticsPanel() {
   }, [entries, subjectFilter]);
 
   const analysisSubject = useMemo((): "math" | "english" => {
-    if (subjectFilter === "math" || subjectFilter === "english") return subjectFilter;
-    if (activeProfile && activeProfile.mathCount >= activeProfile.englishCount) return "math";
+    if (subjectFilter === "english") return "english";
     return "math";
-  }, [subjectFilter, activeProfile]);
+  }, [subjectFilter]);
 
   const refresh = useCallback(() => setHistoryVersion((v) => v + 1), []);
 
@@ -98,7 +107,7 @@ export function StudentAnalyticsPanel() {
       </div>
 
       <div className="mt-4 grid min-h-[28rem] grid-cols-1 gap-6 lg:grid-cols-[minmax(0,15rem)_minmax(0,1fr)]">
-        <aside className="rounded-2xl border border-black/[0.08] bg-white/95 p-3 shadow-card ring-1 ring-white/80">
+        <aside className="glass-panel rounded-2xl p-3 shadow-card">
           <p className="px-2 py-1 text-caption font-bold text-ink-muted">学生列表</p>
           {profiles.length === 0 ? (
             <p className="px-2 py-6 text-center text-caption text-ink-muted">暂无批改历史，请先完成批改并填写学生姓名。</p>
@@ -127,7 +136,7 @@ export function StudentAnalyticsPanel() {
           )}
         </aside>
 
-        <section className="rounded-2xl border border-black/[0.08] bg-white/95 p-5 shadow-card ring-1 ring-white/80 md:p-6">
+        <section className="glass-panel rounded-2xl p-5 shadow-card md:p-6">
           {!activeProfile ? (
             <p className="py-12 text-center text-small text-ink-muted">请选择左侧学生</p>
           ) : (
@@ -137,12 +146,13 @@ export function StudentAnalyticsPanel() {
                   <h2 className="text-xl font-extrabold text-ink">{activeProfile.displayName}</h2>
                   <p className="mt-1 text-caption text-ink-muted">
                     数学 {activeProfile.mathCount} 份 · 英语 {activeProfile.englishCount} 份
+                    {activeProfile.chineseCount > 0 ? ` · 语文 ${activeProfile.chineseCount} 份` : ""}
                     {activeProfile.gradeLevel ? ` · ${activeProfile.gradeLevel}` : ""}
                     {activeProfile.key === UNLABELED_STUDENT_KEY ? " · 建议在批改时填写姓名" : ""}
                   </p>
                 </div>
                 <div className="flex flex-wrap gap-2">
-                  {(["all", "math", "english"] as const).map((s) => (
+                  {(["all", "math", "english", "chinese"] as const).map((s) => (
                     <button
                       key={s}
                       type="button"

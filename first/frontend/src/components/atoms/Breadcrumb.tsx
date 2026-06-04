@@ -1,4 +1,4 @@
-import { Link } from "react-router-dom";
+import { AppLink } from "@/components/atoms/AppLink";
 
 export type BreadcrumbItem = {
   label: string;
@@ -41,20 +41,20 @@ export function Breadcrumb({ items, contentMaxClassName = "max-w-6xl", variant =
             const touch = embedded ? "min-h-8 py-1" : "min-h-9 py-1.5";
             const inner =
               item.to ? (
-                <Link
+                <AppLink
                   to={item.to}
                   title={item.label === "首页" ? "返回应用首页" : undefined}
                   className={`-mx-1 inline-flex items-center rounded-lg px-2 ${touch} font-semibold text-brand transition-colors duration-button ease-smooth hover:bg-primary-tint/80 hover:text-brand-hover hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent`}
                 >
                   {item.label}
-                </Link>
+                </AppLink>
               ) : item.href ? (
-                <a
-                  href={item.href}
+                <AppLink
+                  to={item.href}
                   className={`-mx-1 inline-flex items-center rounded-lg px-2 ${touch} font-semibold text-brand transition-colors duration-button ease-smooth hover:bg-primary-tint/80 hover:text-brand-hover hover:underline`}
                 >
                   {item.label}
-                </a>
+                </AppLink>
               ) : (
                 <span className={`inline-flex items-center px-1 ${touch} font-semibold text-ink`}>{item.label}</span>
               );

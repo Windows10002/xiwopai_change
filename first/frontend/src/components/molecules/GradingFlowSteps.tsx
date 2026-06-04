@@ -1,5 +1,5 @@
 import { Check } from "lucide-react";
-import { Link } from "react-router-dom";
+import { AppLink } from "@/components/atoms/AppLink";
 import { CUTE_ICON } from "@/components/atoms/cuteIcon";
 
 export type GradingFlowStep = {
@@ -57,9 +57,9 @@ export function GradingFlowSteps({ steps, activeIndex }: GradingFlowStepsProps) 
         return (
           <li key={step.id} className="flex min-w-0 flex-1 items-center">
             {step.to ? (
-              <Link to={step.to} className={`${itemClass} rounded-lg px-1 py-1 transition-colors hover:bg-primary-tint/40`}>
+              <AppLink to={step.to} className={`${itemClass} rounded-lg px-1 py-1 transition-colors hover:bg-primary-tint/40`}>
                 {inner}
-              </Link>
+              </AppLink>
             ) : (
               <button type="button" onClick={step.onClick} className={`${itemClass} rounded-lg px-1 py-1 text-left transition-colors hover:bg-primary-tint/40`}>
                 {inner}

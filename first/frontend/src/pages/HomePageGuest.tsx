@@ -3,17 +3,13 @@ import { Lock } from "lucide-react";
 import { useUserPreferences } from "@/hooks/useUserPreferences";
 import { CUTE_ICON } from "@/components/atoms/cuteIcon";
 import { Navbar } from "@/components/atoms/Navbar";
-import { FabHelp } from "@/components/atoms/FabHelp";
+import { PiAssistantFab } from "@/components/atoms/PiAssistantFab";
 import { SubjectCard } from "@/components/molecules/SubjectCard";
 import { IpBrandFace } from "@/components/atoms/IpMascot";
-import { AiHelpModal } from "@/components/organisms/AiHelpModal";
-import { useState } from "react";
 
 /** 未登录默认首页：仅展示批改入口 */
 export function HomePageGuest() {
   const prefs = useUserPreferences();
-  const [helpOpen, setHelpOpen] = useState(false);
-
   return (
     <div className="page-bg-hero-stunning relative flex min-h-screen flex-col">
       <div className="relative z-10 flex flex-1 flex-col">
@@ -64,7 +60,7 @@ export function HomePageGuest() {
             <div className="mt-6 flex flex-col items-center gap-3 rounded-xl border border-primary/20 bg-primary-tint/40 px-4 py-4 text-center ring-1 ring-primary/10 sm:flex-row sm:justify-between sm:text-left">
               <p className="flex items-center justify-center gap-2 text-small font-semibold text-[#006D41] sm:justify-start">
                 <Lock className="h-4 w-4 shrink-0" {...CUTE_ICON} aria-hidden />
-                请登录后解锁作业管理、学情看板等其他功能
+                请登录后解锁作业管理、学情中心等其他功能
               </p>
               <Link
                 to="/login"
@@ -76,9 +72,8 @@ export function HomePageGuest() {
           </div>
         </main>
 
-        {prefs.showHomeFabHelp ? <FabHelp onClick={() => setHelpOpen(true)} /> : null}
+        <PiAssistantFab show={prefs.showHomeFabHelp} />
       </div>
-      <AiHelpModal open={helpOpen} onClose={() => setHelpOpen(false)} />
     </div>
   );
 }

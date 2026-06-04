@@ -535,11 +535,20 @@ class WorkspaceStore:
             raise ValueError("未找到该任务")
         if existing["teacher_sub"] != teacher_sub:
             raise ValueError("无权操作该任务")
-        stats = self.assignment_submission_stats(assignment_id)
-        if stats["submission_count"] > 0:
-            raise ValueError("已有学生提交，无法删除")
         with _lock:
             with self._connect() as conn:
+                sub_ids = [
+                    r[0]
+                    for r in conn.execute(
+                        "SELECT id FROM submissions WHERE assignment_id = ?",
+                        (assignment_id,),
+                    ).fetchall()
+                ]
+                for sid in sub_ids:
+                    conn.execute("DELETE FROM variant_tasks WHERE submission_id = ?", (sid,))
+                    conn.execute("DELETE FROM grading_records WHERE submission_id = ?", (sid,))
+                    conn.execute("DELETE FROM submission_versions WHERE submission_id = ?", (sid,))
+                conn.execute("DELETE FROM submissions WHERE assignment_id = ?", (assignment_id,))
                 conn.execute("DELETE FROM assignments WHERE id = ?", (assignment_id,))
 
     def list_all_assignments(self, *, limit: int = 200) -> list[dict[str, Any]]:

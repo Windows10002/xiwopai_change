@@ -10,13 +10,14 @@ export type StudentProfile = {
   paperCount: number;
   mathCount: number;
   englishCount: number;
+  chineseCount: number;
   avgScorePercent: number | null;
   latestAt: number;
   gradeLevel?: string;
   entryIds: string[];
 };
 
-export type SubjectFilter = "all" | "math" | "english";
+export type SubjectFilter = "all" | "math" | "english" | "chinese";
 
 export function normalizeStudentKey(name: string | undefined): { key: string; displayName: string } {
   const t = (name ?? "").trim();
@@ -37,6 +38,7 @@ export function listStudentProfiles(entries: GradingHistoryEntry[] = loadGrading
         paperCount: 0,
         mathCount: 0,
         englishCount: 0,
+        chineseCount: 0,
         avgScorePercent: null,
         latestAt: 0,
         gradeLevel: e.gradeLevel,
@@ -46,7 +48,8 @@ export function listStudentProfiles(entries: GradingHistoryEntry[] = loadGrading
     }
     p.paperCount += 1;
     if (e.subject === "math") p.mathCount += 1;
-    else p.englishCount += 1;
+    else if (e.subject === "english") p.englishCount += 1;
+    else if (e.subject === "chinese") p.chineseCount += 1;
     p.entryIds.push(e.id);
     if (e.createdAt > p.latestAt) {
       p.latestAt = e.createdAt;
@@ -85,6 +88,21 @@ export function filterHistoryByStudent(
       return true;
     })
     .sort((a, b) => b.createdAt - a.createdAt);
+}
+
+/** 按作业任务名或 assignmentId 筛选（URL ?task=） */
+export function filterHistoryByTask(
+  taskQuery: string,
+  entries: GradingHistoryEntry[],
+): GradingHistoryEntry[] {
+  const q = taskQuery.trim().toLowerCase();
+  if (!q) return entries;
+  return entries.filter(
+    (e) =>
+      e.assignmentId === taskQuery ||
+      (e.assignmentTitle?.toLowerCase().includes(q) ?? false) ||
+      (e.displayTitle?.toLowerCase().includes(q) ?? false),
+  );
 }
 
 export function historyToInsightEntries(

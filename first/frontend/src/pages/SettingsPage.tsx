@@ -1,5 +1,7 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { Link, useLocation } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
+import { AppLink } from "@/components/atoms/AppLink";
+import { withAuthSlot } from "@/lib/authSlot";
 import { ArrowLeft, SlidersHorizontal } from "lucide-react";
 
 import { Navbar } from "@/components/atoms/Navbar";
@@ -12,11 +14,13 @@ import {
   DEFAULT_USER_PREFERENCES,
   saveUserPreferences,
   syncUserPreferencesToDom,
+  type AssistantModePref,
   type InsightTabPref,
   type UserPreferences,
 } from "@/lib/userPreferences";
+import { fetchAssistantConfig } from "@/lib/piAssistantChatApi";
 import type { ExportDimensionFilter } from "@/lib/exportGrading";
-import { StudentGradingDisputePanel, TeacherGradingDisputePanel } from "@/components/molecules/GradingDisputePanels";
+import { StudentGradingDisputePanel } from "@/components/molecules/GradingDisputePanels";
 import { GlassOpacityControl } from "@/components/molecules/GlassOpacityControl";
 import {
   addRosterStudent,
@@ -170,6 +174,65 @@ function TeacherRosterSection() {
   );
 }
 
+function PiAssistantModeSection({
+  mode,
+  llmAvailable,
+  onChange,
+}: {
+  mode: AssistantModePref;
+  llmAvailable: boolean;
+  onChange: (m: AssistantModePref) => void;
+}) {
+  return (
+    <PrefSection
+      title="π 智能助手"
+      desc={
+        llmAvailable
+          ? "规则模式：关键词匹配，响应快。智能问答：调用大模型，适合复杂问题（每轮对话有次数上限）。"
+          : "当前环境未配置 AGNES_API_KEY（π 助手专用），仅可使用规则模式。在 .env 填入后重启后端即可。"
+      }
+    >
+      <div className="space-y-2">
+        <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-black/[0.06] bg-surface-page/80 px-4 py-3">
+          <input
+            type="radio"
+            name="assistant-mode"
+            checked={mode === "rules"}
+            onChange={() => onChange("rules")}
+            className="mt-1 accent-accent-mint"
+          />
+          <span>
+            <span className="block text-small font-bold text-ink">规则模式（默认）</span>
+            <span className="mt-0.5 block text-caption text-ink-muted">找功能、FAQ，不消耗 API</span>
+          </span>
+        </label>
+        <label
+          className={`flex items-start gap-3 rounded-xl border px-4 py-3 ${
+            llmAvailable
+              ? "cursor-pointer border-black/[0.06] bg-surface-page/80"
+              : "cursor-not-allowed border-black/[0.04] bg-gray-50/80 opacity-70"
+          }`}
+        >
+          <input
+            type="radio"
+            name="assistant-mode"
+            checked={mode === "llm"}
+            disabled={!llmAvailable}
+            onChange={() => onChange("llm")}
+            className="mt-1 accent-accent-mint"
+          />
+          <span>
+            <span className="block text-small font-bold text-ink">智能问答</span>
+            <span className="mt-0.5 block text-caption text-ink-muted">
+              {llmAvailable ? "Agnes 大模型，抽屉内可切换" : "需在 .env 配置 AGNES_API_KEY"}
+            </span>
+          </span>
+        </label>
+      </div>
+    </PrefSection>
+  );
+}
+
 function TeacherNoteTemplatesSection() {
   const [templates, setTemplates] = useState(() => loadNoteTemplates());
   const [draft, setDraft] = useState("");
@@ -212,12 +275,21 @@ export function SettingsPage() {
   const prefs = useUserPreferences();
   const sessionInfo = useAppSession();
   const location = useLocation();
+  const navigate = useNavigate();
+  const [assistantLlmAvailable, setAssistantLlmAvailable] = useState(false);
+
+  useEffect(() => {
+    void fetchAssistantConfig(true)
+      .then((c) => setAssistantLlmAvailable(c.llm_available))
+      .catch(() => setAssistantLlmAvailable(false));
+  }, []);
 
   useEffect(() => {
     if (location.hash !== "#disputes") return;
-    const el = document.getElementById("disputes");
-    if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
-  }, [location.hash]);
+    if (sessionInfo && hasPermission(sessionInfo, "disputes.review")) {
+      navigate(withAuthSlot("/disputes"), { replace: true });
+    }
+  }, [location.hash, navigate, sessionInfo]);
 
   const resetPrefs = () => {
     const next = saveUserPreferences({ ...DEFAULT_USER_PREFERENCES });
@@ -228,13 +300,13 @@ export function SettingsPage() {
     <div className="page-bg-hero-stunning relative flex min-h-screen flex-col">
       <Navbar />
       <main className="mx-auto w-full max-w-2xl flex-1 px-4 py-8 md:px-6 md:py-10">
-        <Link
+        <AppLink
           to="/"
           className="mb-6 inline-flex items-center gap-2 text-small font-semibold text-brand transition hover:text-brand-hover"
         >
           <ArrowLeft className="h-4 w-4" {...CUTE_ICON} aria-hidden />
           返回首页
-        </Link>
+        </AppLink>
 
         <div className="rounded-[1.25rem] border border-black/[0.08] bg-white/95 p-6 shadow-card ring-1 ring-primary/10 md:p-8">
           <div className="flex items-start gap-3">
@@ -275,18 +347,18 @@ export function SettingsPage() {
             <>
               <PrefSection title="教师 / 教务工具">
                 <div className="flex flex-wrap gap-2">
-                  <Link
-                    to="/class-analytics"
-                    className="rounded-xl border border-primary/25 bg-primary-tint/80 px-4 py-2.5 text-caption font-bold text-ink-navActive"
-                  >
-                    班级学情看板
-                  </Link>
-                  <Link
+                  <AppLink
                     to="/feedback-dashboard"
                     className="rounded-xl border border-amber-200/80 bg-amber-50 px-4 py-2.5 text-caption font-bold text-amber-950"
                   >
-                    判题反馈看板
-                  </Link>
+                    判题反馈
+                  </AppLink>
+                  <AppLink
+                    to="/product-feedback"
+                    className="rounded-xl border border-sky-200/80 bg-sky-50 px-4 py-2.5 text-caption font-bold text-sky-950"
+                  >
+                    产品反馈
+                  </AppLink>
                 </div>
               </PrefSection>
               {hasPermission(sessionInfo, "roster.manage") ? (
@@ -295,15 +367,14 @@ export function SettingsPage() {
                   <TeacherNoteTemplatesSection />
                 </>
               ) : null}
-              {hasPermission(sessionInfo, "disputes.review") ? <TeacherGradingDisputePanel /> : null}
               {hasPermission(sessionInfo, "workspace.manage") ? (
                 <PrefSection title="作业管理" desc="发布任务、收发作业、推送变式题与验收订正。">
-                  <Link
+                  <AppLink
                     to="/workspace"
                     className="inline-flex min-h-11 items-center justify-center rounded-xl border border-violet-200 bg-violet-50 px-4 text-small font-bold text-violet-950"
                   >
                     打开作业管理
-                  </Link>
+                  </AppLink>
                 </PrefSection>
               ) : null}
             </>
@@ -315,31 +386,53 @@ export function SettingsPage() {
               </PrefSection>
               <PrefSection title="作业与任务" desc="教师布置的任务与下发的批改结果。">
                 <div className="flex flex-wrap gap-2">
-                  <Link
+                  <AppLink
                     to="/todo"
                     className="inline-flex min-h-11 items-center justify-center rounded-xl border border-primary/25 bg-primary-tint/80 px-4 text-small font-bold text-ink-navActive"
                   >
                     待办任务
-                  </Link>
-                  <Link
+                  </AppLink>
+                  <AppLink
                     to="/my-work"
                     className="inline-flex min-h-11 items-center justify-center rounded-xl border border-primary/25 bg-white px-4 text-small font-bold text-ink"
                   >
                     我的作业
-                  </Link>
+                  </AppLink>
                 </div>
               </PrefSection>
               <PrefSection title="错题本" desc="自动收录批改中的错题，便于课后复习。">
-                <Link
+                <AppLink
                   to="/wrong-book"
                   className="inline-flex min-h-11 items-center justify-center rounded-xl border border-primary/25 bg-primary-tint/80 px-4 text-small font-bold text-ink-navActive transition hover:border-primary/40 hover:bg-primary-tint"
                 >
                   打开我的错题本
-                </Link>
+                </AppLink>
+              </PrefSection>
+              <PrefSection title="π 助学" desc="分析错题、讲解不会的题；可切换智能问答。">
+                <AppLink
+                  to="/pi-tutor"
+                  className="inline-flex min-h-11 items-center justify-center rounded-xl border border-cyan-200/80 bg-cyan-50 px-4 text-small font-bold text-cyan-950"
+                >
+                  打开 π 助学
+                </AppLink>
+              </PrefSection>
+              <PrefSection title="π 奖励" desc="完成作业收集徽章，积分可兑换虚拟奖励。">
+                <AppLink
+                  to="/rewards"
+                  className="inline-flex min-h-11 items-center justify-center rounded-xl border border-amber-200/80 bg-amber-50 px-4 text-small font-bold text-amber-950"
+                >
+                  打开 π 奖励
+                </AppLink>
               </PrefSection>
               <StudentGradingDisputePanel studentGrade={sessionInfo.studentGrade} />
             </>
           ) : null}
+
+          <PiAssistantModeSection
+            mode={prefs.assistantMode}
+            llmAvailable={assistantLlmAvailable}
+            onChange={(m) => applyPrefs({ assistantMode: m })}
+          />
 
           <PrefSection title="界面与辅助" desc="影响全站字号、动画与帮助入口。">
             <PrefToggle

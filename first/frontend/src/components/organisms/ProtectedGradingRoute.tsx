@@ -1,6 +1,8 @@
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Link, useLocation, useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
+
+import { AppLink } from "@/components/atoms/AppLink";
 import { Lock, ShieldCheck } from "lucide-react";
 
 import { CUTE_ICON } from "@/components/atoms/cuteIcon";
@@ -55,12 +57,12 @@ export function ProtectedGradingRoute({ children }: ProtectedGradingRouteProps) 
           <p className="mt-2 text-small leading-relaxed text-ink-muted">
             登录后按端别授权：家长端可代孩子批改；学生端、教师端、教务端可使用智能批改（学生低龄需确认）。
           </p>
-          <Link
+          <AppLink
             to={`/login?redirect=${encodeURIComponent(path)}`}
             className="btn-accent-mint-solid mt-8 inline-flex min-h-11 w-full items-center justify-center rounded-xl px-4 text-small font-bold"
           >
             去登录
-          </Link>
+          </AppLink>
           <button
             type="button"
             onClick={() => navigate("/")}

@@ -6,7 +6,7 @@ import { buildBatchInsightItems } from "@/lib/gradingBatchInsights";
 export type ClassGroupSummary = {
   groupKey: string;
   groupName: string;
-  subject: "math" | "english" | "mixed";
+  subject: "math" | "english" | "chinese" | "mixed";
   paperCount: number;
   avgScorePercent: number | null;
   latestAt: number;
@@ -66,7 +66,7 @@ export function entriesForGroup(
 
 export function groupToInsightEntries(
   groupKey: string,
-  subject: "math" | "english",
+  subject: "math" | "english" | "chinese",
   entries: GradingHistoryEntry[] = loadGradingHistory(),
 ): Array<{ fileName: string; detail: GradingResultDetail }> {
   const rows = entriesForGroup(groupKey, entries).filter((e) => e.subject === subject);
@@ -77,8 +77,9 @@ export function groupToInsightEntries(
 }
 
 export function groupInsightPayload(
-  subject: "math" | "english",
+  subject: "math" | "english" | "chinese",
   items: Array<{ fileName: string; detail: GradingResultDetail }>,
 ) {
-  return buildBatchInsightItems(subject, items);
+  const batchSubject = subject === "english" ? "english" : "math";
+  return buildBatchInsightItems(batchSubject, items);
 }

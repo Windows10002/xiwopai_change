@@ -7,6 +7,9 @@ import { applyGlassThemeToDom, clampGlassOpacity, GLASS_OPACITY_DEFAULT } from "
 
 export type InsightTabPref = "summary" | "strengths" | "improve";
 
+/** π 助手：规则匹配 / 大模型智能问答 */
+export type AssistantModePref = "rules" | "llm";
+
 export type UserPreferences = {
   reduceMotion: boolean;
   largerText: boolean;
@@ -33,6 +36,8 @@ export type UserPreferences = {
   exportIncludeVariants: boolean;
   /** 毛玻璃面板浓淡：0 更透，100 更实 */
   glassOpacity: number;
+  /** π 助手对话模式（llm 需服务端配置 AGNES_API_KEY） */
+  assistantMode: AssistantModePref;
 };
 
 const STORAGE_KEY = "seewo_pi_user_prefs_v2";
@@ -59,6 +64,7 @@ export const DEFAULT_USER_PREFERENCES: UserPreferences = {
   exportIncludeLearningReport: true,
   exportIncludeVariants: true,
   glassOpacity: GLASS_OPACITY_DEFAULT,
+  assistantMode: "rules",
 };
 
 function emitPrefsChanged(): void {
@@ -75,6 +81,10 @@ function parseInsightTab(v: unknown): InsightTabPref {
 function parseExportDimensions(v: unknown): ExportDimensionFilter {
   if (v === "errors" || v === "correct") return v;
   return "all";
+}
+
+function parseAssistantMode(v: unknown): AssistantModePref {
+  return v === "llm" ? "llm" : "rules";
 }
 
 function normalizePartial(o: Partial<UserPreferences> | Record<string, unknown>): UserPreferences {
@@ -99,6 +109,7 @@ function normalizePartial(o: Partial<UserPreferences> | Record<string, unknown>)
     exportIncludeLearningReport: o.exportIncludeLearningReport !== false,
     exportIncludeVariants: o.exportIncludeVariants !== false,
     glassOpacity: clampGlassOpacity(Number(o.glassOpacity ?? d.glassOpacity)),
+    assistantMode: parseAssistantMode(o.assistantMode),
   };
 }
 

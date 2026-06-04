@@ -1,5 +1,5 @@
 import { BookOpen, Calculator, ChevronRight, Languages } from "lucide-react";
-import { Link } from "react-router-dom";
+import { AppLink } from "@/components/atoms/AppLink";
 import { CUTE_ICON } from "@/components/atoms/cuteIcon";
 
 export type SubjectCardProps = {
@@ -68,7 +68,7 @@ export function SubjectCard({ title, description, to, className, theme, badge, e
 
   if (emphasis) {
     return (
-      <Link
+      <AppLink
         to={to}
         className={`group relative flex min-h-[9.5rem] flex-col items-center justify-center gap-3 rounded-2xl border px-6 py-8 text-center shadow-card transition-all duration-hover ease-smooth hover:-translate-y-1 hover:shadow-[0_16px_48px_rgba(82,196,26,0.15)] active:translate-y-0 ${THEME_SHELL[themeKey]} ${className ?? ""}`}
       >
@@ -92,12 +92,12 @@ export function SubjectCard({ title, description, to, className, theme, badge, e
           开始批改
           <ChevronRight className="h-4 w-4" {...CUTE_ICON} aria-hidden />
         </span>
-      </Link>
+      </AppLink>
     );
   }
 
   return (
-    <Link
+    <AppLink
       to={to}
       className={`group relative flex gap-4 rounded-card border p-4 shadow-card transition-all duration-hover ease-smooth hover:-translate-y-1 active:translate-y-0 md:p-4 ${THEME_SHELL[themeKey]} ${className ?? ""}`}
     >
@@ -124,6 +124,6 @@ export function SubjectCard({ title, description, to, className, theme, badge, e
         </span>
         <span className="mt-1 block text-caption leading-snug text-ink-muted">{description}</span>
       </span>
-    </Link>
+    </AppLink>
   );
 }

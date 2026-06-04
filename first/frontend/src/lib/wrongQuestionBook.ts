@@ -1,14 +1,24 @@
 import { loadGradingHistory, type GradingHistoryEntry } from "@/lib/gradingHistory";
+import type { GradeSubject } from "@/lib/gradeSubject";
+import { subjectLabelCn } from "@/lib/gradeSubject";
 
 const DISMISSED_KEY = "wrong_book_dismissed_v1";
 const CORRECTED_KEY = "wrong_book_corrected_v1";
+
+export const WRONG_BOOK_CHANGED = "wrong-book-changed";
+
+function emitWrongBookChanged(): void {
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new Event(WRONG_BOOK_CHANGED));
+  }
+}
 
 const WRONG_STATUSES = new Set(["错误", "未作答"]);
 
 export type WrongBookItem = {
   id: string;
   historyEntryId: string;
-  subject: "math" | "english";
+  subject: GradeSubject;
   createdAt: number;
   fileName: string;
   questionLabel: string;
@@ -65,24 +75,28 @@ export function markWrongBookCorrected(id: string) {
   const next = loadCorrectedIds();
   next.add(id);
   saveCorrectedIds(next);
+  emitWrongBookChanged();
 }
 
 export function unmarkWrongBookCorrected(id: string) {
   const next = loadCorrectedIds();
   next.delete(id);
   saveCorrectedIds(next);
+  emitWrongBookChanged();
 }
 
 export function dismissWrongBookItem(id: string) {
   const next = loadDismissedIds();
   next.add(id);
   saveDismissedIds(next);
+  emitWrongBookChanged();
 }
 
 export function restoreWrongBookItem(id: string) {
   const next = loadDismissedIds();
   next.delete(id);
   saveDismissedIds(next);
+  emitWrongBookChanged();
 }
 
 export function extractWrongBookItems(entries: GradingHistoryEntry[]): WrongBookItem[] {
@@ -140,9 +154,7 @@ export function countWrongBookItems(): number {
   return loadWrongBookItems().length;
 }
 
-export function subjectLabelCn(subject: WrongBookItem["subject"]): string {
-  return subject === "math" ? "数学" : "英语";
-}
+export { subjectLabelCn };
 
 export function formatWrongBookDate(ts: number): string {
   return new Date(ts).toLocaleString("zh-CN", {

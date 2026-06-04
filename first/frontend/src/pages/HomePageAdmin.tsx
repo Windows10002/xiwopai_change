@@ -1,10 +1,13 @@
-import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { useCallback, useEffect, useState } from "react";
 import { ClipboardList, MessageSquareWarning, Settings, Shield } from "lucide-react";
 
+import { AppLink } from "@/components/atoms/AppLink";
+import { PiAssistantFab } from "@/components/atoms/PiAssistantFab";
 import { Navbar } from "@/components/atoms/Navbar";
+import { useUserPreferences } from "@/hooks/useUserPreferences";
 import { CUTE_ICON } from "@/components/atoms/cuteIcon";
 import { IpBrandFace } from "@/components/atoms/IpMascot";
+import { useWorkspaceAssignmentsSync } from "@/hooks/useWorkspaceAssignmentsSync";
 import { fetchAllAssignments, type WorkspaceAssignment } from "@/lib/workspaceApi";
 import { loadAuthToken } from "@/lib/apiClient";
 
@@ -12,8 +15,9 @@ const SUBJECT_CN = { math: "数学", english: "英语", chinese: "语文" } as c
 
 const TILES = [
   { to: "/workspace", label: "作业总览", desc: "全校任务发布与审阅同步", icon: ClipboardList },
-  { to: "/class-analytics", label: "班级看板", desc: "批次分析、学生学情与共性错题", icon: ClipboardList },
-  { to: "/feedback-dashboard", label: "判题反馈", desc: "教师反馈与模型优化线索", icon: MessageSquareWarning },
+  { to: "/class-analytics", label: "学情中心", desc: "本机批改汇总、按学生分析", icon: ClipboardList },
+  { to: "/feedback-dashboard", label: "判题反馈", desc: "教师判题异议与模型优化线索", icon: MessageSquareWarning },
+  { to: "/product-feedback", label: "产品反馈", desc: "π 助手用户建议与 Bug 汇总导出", icon: MessageSquareWarning },
   { to: "/math", label: "数学批改", desc: "抽检或演示批改（教务权限）", icon: Shield },
   { to: "/english", label: "英语批改", desc: "抽检或演示批改", icon: Shield },
   { to: "/chinese", label: "语文批改", desc: "抽检或演示批改", icon: Shield },
@@ -31,34 +35,45 @@ function formatWhen(iso: string) {
 
 /** 教务系统端首页 */
 export function HomePageAdmin() {
+  const prefs = useUserPreferences();
   const [assignments, setAssignments] = useState<WorkspaceAssignment[]>([]);
 
-  useEffect(() => {
+  const loadAssignments = useCallback(() => {
     if (!loadAuthToken()) return;
     void fetchAllAssignments()
       .then(setAssignments)
       .catch(() => setAssignments([]));
   }, []);
 
+  useEffect(() => {
+    loadAssignments();
+  }, [loadAssignments]);
+
+  useWorkspaceAssignmentsSync(loadAssignments);
+
   return (
     <div className="page-bg-hero-stunning relative flex min-h-screen flex-col">
       <Navbar />
-      <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col px-4 py-8 md:px-6 md:py-10">
-        <div className="rounded-[28px] border border-slate-200/80 bg-gradient-to-br from-slate-50 via-white to-sky-50/60 px-6 py-9 shadow-card">
-          <div className="flex flex-wrap items-center gap-4">
-            <IpBrandFace size="md" />
-            <div>
-              <span className="rounded-full bg-slate-800 px-2.5 py-0.5 text-caption font-bold text-white">教务系统端</span>
-              <h1 className="mt-2 text-2xl font-extrabold text-ink">校级学情与质检工作台</h1>
-              <p className="mt-1 max-w-xl text-small text-ink-muted">
+      <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col px-4 py-8 md:px-6 md:py-10 lg:py-12">
+        <div className="rounded-[28px] border border-slate-200/80 bg-gradient-to-br from-slate-50 via-white to-sky-50/60 px-5 py-9 shadow-[0_28px_90px_rgba(15,90,75,0.14)] ring-1 ring-white/90 backdrop-blur-sm sm:px-8 sm:py-10 md:px-11 md:py-12">
+          <div className="flex flex-col gap-8 lg:flex-row lg:items-center lg:justify-between lg:gap-12">
+            <div className="min-w-0 flex-1">
+              <span className="rounded-full bg-slate-800 px-2.5 py-0.5 text-small font-bold text-white">教务系统端</span>
+              <h1 className="mt-3 text-3xl font-extrabold tracking-tight text-ink md:text-[2rem] lg:text-4xl">
+                校级学情与质检工作台
+              </h1>
+              <p className="mt-3 max-w-xl text-lg text-ink-muted md:text-xl">
                 可查看全校任务与学情、处理申诉与反馈；教师端发布/编辑的任务会同步显示在下方总览。
               </p>
+            </div>
+            <div className="flex justify-center lg:justify-end lg:pr-2">
+              <IpBrandFace size="hero" className="shrink-0" />
             </div>
           </div>
 
           <div className="mt-8 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {TILES.map(({ to, label, desc, icon: Icon }) => (
-              <Link
+              <AppLink
                 key={to}
                 to={to}
                 className="flex gap-3 rounded-2xl border border-slate-200/80 bg-white/95 p-4 shadow-sm transition hover:border-sky-300 hover:shadow-md"
@@ -70,7 +85,7 @@ export function HomePageAdmin() {
                   <span className="text-body font-bold text-ink">{label}</span>
                   <span className="mt-0.5 block text-caption text-ink-muted">{desc}</span>
                 </span>
-              </Link>
+              </AppLink>
             ))}
           </div>
 
@@ -96,6 +111,7 @@ export function HomePageAdmin() {
           </div>
         </div>
       </main>
+      <PiAssistantFab show={prefs.showHomeFabHelp} />
     </div>
   );
 }

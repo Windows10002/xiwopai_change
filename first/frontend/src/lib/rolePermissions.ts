@@ -15,11 +15,21 @@ export type Permission =
   | "workspace.view_own"
   | "workspace.view_child"
   | "workspace.submit"
-  | "workspace.manage";
+  | "workspace.manage"
+  | "rewards.view"
+  | "pi.tutor";
 
 const ROLE_PERMISSIONS: Record<AppUserRole, ReadonlySet<Permission>> = {
   parent: new Set(["grading.access", "workspace.view_child"]),
-  student: new Set(["grading.access", "wrong_book", "disputes.submit", "workspace.view_own", "workspace.submit"]),
+  student: new Set([
+    "grading.access",
+    "wrong_book",
+    "disputes.submit",
+    "workspace.view_own",
+    "workspace.submit",
+    "rewards.view",
+    "pi.tutor",
+  ]),
   teacher: new Set([
     "grading.access",
     "grading.manage",
@@ -77,8 +87,8 @@ export function deniedMessage(perm: Permission): string {
     "grading.manage": "当前身份无法修改分数或提交教师反馈",
     wrong_book: "错题本仅学生端可用",
     "analytics.student": "学生学情仅教师端与教务端可用",
-    "analytics.class": "班级看板仅教师端与教务端可用",
-    "feedback.dashboard": "反馈看板仅教师端与教务端可用",
+    "analytics.class": "学情中心仅教师端与教务端可用",
+    "feedback.dashboard": "判题反馈仅教师端与教务端可用",
     "disputes.review": "申诉审核仅教师端与教务端可用",
     "disputes.submit": "判题申诉仅学生端可提交",
     "roster.manage": "学生名册仅教师端与教务端可管理",
@@ -87,6 +97,8 @@ export function deniedMessage(perm: Permission): string {
     "workspace.view_child": "孩子任务仅家长端可用",
     "workspace.submit": "提交任务作业需学生端登录",
     "workspace.manage": "任务与收发仅教师端与教务端可用",
+    "rewards.view": "π 奖励仅学生端可用",
+    "pi.tutor": "π 助学仅学生端可用",
   };
   return map[perm] ?? "当前身份无此功能权限";
 }
