@@ -17,8 +17,7 @@ from colorama import init, Fore, Style
 # ================= 1. 基础配置 =================
 init(autoreset=True)
 
-# 请替换为你的有效 API Key，或设置环境变量 DASHSCOPE_API_KEY
-dashscope.api_key = os.getenv("DASHSCOPE_API_KEY", "sk-bd9f8ad136bc435e8414a14478a565f4")
+dashscope.api_key = os.getenv("DASHSCOPE_API_KEY", "")
 
 ENG_FOLDER = "img_english"
 OUTPUT_EXCEL = "希沃智教_英语作文深度批改报告.xlsx"
@@ -328,25 +327,39 @@ def analyze_image(
         content.append({"text": PROMPT_SYSTEM + extra})
         messages = [{"role": "user", "content": content}]
 
-        resp = dashscope.MultiModalConversation.call(
-            model="qwen-vl-max",
-            messages=messages,
-            timeout=120
-        )
+        raw_text: str | None = None
+        try:
+            from core.moonshot_client import moonshot_configured, moonshot_vision_chat
+        except ImportError:
+            moonshot_configured = lambda: False  # type: ignore
+            moonshot_vision_chat = None  # type: ignore
 
-        if resp.status_code == HTTPStatus.OK:
-            content = resp.output.choices[0].message.content[0]["text"]
-            json_match = re.search(r'\{.*\}', content, re.DOTALL)
-            if json_match:
-                json_str = re.sub(r'^```json\s*', '', json_match.group())
-                json_str = re.sub(r'\s*```$', '', json_str)
-                return _sanitize_english_essay_result(json.loads(json_str))
-            else:
-                logging.error(f"未检测到JSON格式，原始内容: {content[:200]}")
+        if moonshot_configured() and moonshot_vision_chat is not None:
+            raw_text, err = moonshot_vision_chat(content, timeout=120)
+            if err:
+                logging.error(f"Kimi 英语批改失败：{err}")
                 return None
         else:
-            logging.error(f"API 调用失败 - 状态码: {resp.status_code}, 错误: {resp.message}")
+            resp = dashscope.MultiModalConversation.call(
+                model=os.getenv("DASHSCOPE_VL_MODEL", "qwen-vl-max"),
+                messages=messages,
+                timeout=120,
+            )
+            if resp.status_code == HTTPStatus.OK:
+                raw_text = resp.output.choices[0].message.content[0]["text"]
+            else:
+                logging.error(f"DashScope API 调用失败 - 状态码: {resp.status_code}, 错误: {resp.message}")
+                return None
+
+        if raw_text:
+            json_match = re.search(r"\{.*\}", raw_text, re.DOTALL)
+            if json_match:
+                json_str = re.sub(r"^```json\s*", "", json_match.group())
+                json_str = re.sub(r"\s*```$", "", json_str)
+                return _sanitize_english_essay_result(json.loads(json_str))
+            logging.error(f"未检测到JSON格式，原始内容: {raw_text[:200]}")
             return None
+        return None
     except json.JSONDecodeError as e:
         logging.error(f"JSON 解析失败: {e}")
         return None

@@ -7,7 +7,7 @@ export function MathGradingPage() {
       <GradingWorkspace
         subjectLabel="数学作业"
         uploadTitle="拖放数学作业照片到此处"
-        uploadHint="支持 JPG / PNG / WebP / BMP / GIF；建议正对纸张、光线均匀。"
+        uploadHint="支持 JPG / PNG / WebP / BMP / GIF / PDF；PDF 将按页转为图片批改。建议正对纸张、光线均匀。"
         subject="math"
       />
     </ProtectedGradingRoute>

@@ -217,6 +217,25 @@ export type HistoryRowGroup = {
 };
 export type HistoryDisplayRow = HistoryRowSingle | HistoryRowGroup;
 
+/** 从列表行取代表条目（用于按学科跳转批改页） */
+export function historyEntryFromRow(row: HistoryDisplayRow): GradingHistoryEntry | undefined {
+  return row.type === "single" ? row.entry : row.items[0];
+}
+
+/** 同一文件夹批改组内的全部记录（按 groupIndex 排序） */
+export function loadGradingHistoryGroup(groupKey: string, subject?: GradingHistoryEntry["subject"]): GradingHistoryEntry[] {
+  return loadGradingHistory()
+    .filter((e) => e.groupKey === groupKey && (!subject || e.subject === subject))
+    .sort((a, b) => (a.groupIndex ?? 0) - (b.groupIndex ?? 0) || a.createdAt - b.createdAt);
+}
+
+/** 打开历史时：单条返回自身，文件夹批改返回整组 */
+export function entriesForHistoryApply(entry: GradingHistoryEntry): GradingHistoryEntry[] {
+  if (!entry.groupKey) return [entry];
+  const group = loadGradingHistoryGroup(entry.groupKey, entry.subject);
+  return group.length ? group : [entry];
+}
+
 /** 将带 groupKey 的条目合并为一条「文件夹批改」展示行 */
 export function buildGroupedHistoryRows(entries: GradingHistoryEntry[]): HistoryDisplayRow[] {
   const groupMap = new Map<string, GradingHistoryEntry[]>();

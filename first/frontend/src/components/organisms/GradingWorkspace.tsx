@@ -26,6 +26,8 @@ import { mapWithConcurrency } from "@/lib/batchConcurrency";
 import type { GradingFeedbackTrace } from "@/lib/gradingFeedbackApi";
 import {
   GRADING_HISTORY_CHANGED,
+  entriesForHistoryApply,
+  historyEntryTitle,
   loadGradingHistory,
   saveGradingHistoryEntry,
   type GradingHistoryEntry,
@@ -38,6 +40,11 @@ import { GlassOpacityControl } from "@/components/molecules/GlassOpacityControl"
 import type { BatchInsightsResponse } from "@/lib/gradingBatchInsights";
 import { saveUserPreferences } from "@/lib/userPreferences";
 import { checkImageQuality } from "@/lib/imageQualityCheck";
+import {
+  expandGradingUploadFiles,
+  GRADING_UPLOAD_ACCEPT,
+  isAllowedGradingUploadFile,
+} from "@/lib/gradingUploadFiles";
 import { rememberStudentFromGrading } from "@/lib/studentRoster";
 import { loadStudentProfileName } from "@/lib/studentProfileName";
 import { syncRewardsFromGradingEntry } from "@/lib/studentRewards";
@@ -45,6 +52,7 @@ import { publishSubmissionToStudent, type WorkspaceAssignment } from "@/lib/work
 import { defaultGradeLevelForTeacher } from "@/lib/teacherGradeLevel";
 import { scoringPipelineSubject, subjectLabelCn } from "@/lib/gradeSubject";
 import { DEMO_PUBLISH_HINT } from "@/lib/demoEnvironment";
+import { gradingPathForEntry } from "@/lib/teacherRoutes";
 import { canManageGrading } from "@/lib/rolePermissions";
 import { useUserPreferences } from "@/hooks/useUserPreferences";
 import { CUTE_ICON } from "@/components/atoms/cuteIcon";
@@ -57,9 +65,6 @@ export type GradingWorkspaceProps = {
   uploadHint?: string;
   subject: "math" | "english" | "chinese";
 };
-
-const ALLOWED_IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "image/bmp", "image/gif"]);
-const ALLOWED_IMAGE_EXTENSIONS = new Set(["jpg", "jpeg", "png", "webp", "bmp", "gif"]);
 
 const CONTENT_MAX = "max-w-7xl w-full min-w-0";
 
@@ -80,11 +85,6 @@ function safeReleaseObjectUrl(url: string | null | undefined) {
   if (url?.startsWith("blob:")) URL.revokeObjectURL(url);
 }
 
-function isAllowedImageFile(file: File): boolean {
-  const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
-  return ALLOWED_IMAGE_TYPES.has(file.type) || ALLOWED_IMAGE_EXTENSIONS.has(ext);
-}
-
 const SUBJECT_TOOLBAR_ICON = { math: Calculator, english: BookOpen, chinese: BookOpen } as const;
 
 /**
@@ -101,6 +101,8 @@ export function GradingWorkspace({
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [result, setResult] = useState<GradingResultDetail | null>(null);
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  /** 从历史整组载入时无 File 对象，用文件名列表驱动多图切换条 */
+  const [historyBatchLabels, setHistoryBatchLabels] = useState<string[]>([]);
   const [batchResults, setBatchResults] = useState<Array<GradingResultDetail | null>>([]);
   const [batchErrors, setBatchErrors] = useState<Array<string | null>>([]);
   const [currentFileIndex, setCurrentFileIndex] = useState(0);
@@ -221,6 +223,7 @@ export function GradingWorkspace({
         setBatchResults(results);
         setBatchErrors(Array.from({ length: items.length }, () => null));
         setSelectedFiles([]);
+        setHistoryBatchLabels(items.map((it) => it.fileName));
         setGradingProgress({ done: items.length, total: items.length });
         historyIdByIndexRef.current = { ...idMap };
         setHistoryEntryIdByIndex(idMap);
@@ -247,6 +250,7 @@ export function GradingWorkspace({
         }
         setStep(3);
       } else {
+        setHistoryBatchLabels([]);
         setResult(d.detail);
         setInsightFileName(d.fileName?.trim() ?? "");
         const s = d.step;
@@ -290,6 +294,7 @@ export function GradingWorkspace({
       Boolean(previewUrl) ||
       Boolean(result) ||
       selectedFiles.length > 0 ||
+      historyBatchLabels.length > 0 ||
       Object.keys(serverPreviewByIndexRef.current).length > 0 ||
       contextModalOpen;
     if (!hasContent) {
@@ -319,6 +324,7 @@ export function GradingWorkspace({
     previewUrlRef.current = null;
     setPreviewUrl(null);
     setSelectedFiles([]);
+    setHistoryBatchLabels([]);
     setBatchResults([]);
     setBatchErrors([]);
     setCurrentFileIndex(0);
@@ -385,6 +391,7 @@ export function GradingWorkspace({
       const file = imageFiles[0];
       pendingFileRef.current = file;
       setSelectedFiles(imageFiles);
+      setHistoryBatchLabels([]);
       setBatchResults(Array.from({ length: imageFiles.length }, () => null));
       setBatchErrors(Array.from({ length: imageFiles.length }, () => null));
       setGradingProgress({ done: 0, total: imageFiles.length });
@@ -441,21 +448,51 @@ export function GradingWorkspace({
     (files: FileList | null) => {
       if (!files?.length) return;
 
-      window.setTimeout(() => {
-        const imageFiles = Array.from(files).filter(isAllowedImageFile).sort((a, b) => a.name.localeCompare(b.name, "zh-Hans-CN"));
-        if (!imageFiles.length) {
+      void (async () => {
+        const raw = Array.from(files).filter(isAllowedGradingUploadFile);
+        if (!raw.length) {
           setUploadStatus({
             phase: "error",
-            message: "未识别到可批改图片，请上传 JPG、PNG、WebP、BMP 或 GIF。",
+            message: "未识别到可批改文件，请上传 JPG、PNG、WebP、BMP、GIF 或 PDF。",
           });
           schedule(() => setUploadStatus({ phase: "idle" }), 4500);
           return;
         }
 
+        const hasPdf = raw.some((f) => f.name.toLowerCase().endsWith(".pdf") || f.type === "application/pdf");
+        if (hasPdf) {
+          setUploadStatus({ phase: "uploading", progress: 12, message: "正在解析 PDF，请稍候…" });
+        }
+
+        const { files: imageFiles, pdfErrors, pdfTruncated } = await expandGradingUploadFiles(raw);
+
+        if (!imageFiles.length) {
+          setUploadStatus({
+            phase: "error",
+            message: pdfErrors[0] ?? "未识别到可批改内容，请检查 PDF 是否损坏或为空。",
+          });
+          schedule(() => setUploadStatus({ phase: "idle" }), 5000);
+          return;
+        }
+
+        const notes: string[] = [];
+        if (pdfTruncated) notes.push("部分 PDF 超过 30 页，仅解析前 30 页");
+        if (pdfErrors.length) notes.push(...pdfErrors.slice(0, 2));
+        if (imageFiles.length > 1 && raw.length === 1 && hasPdf) {
+          notes.unshift(`已从 PDF 解析 ${imageFiles.length} 页`);
+        }
+
+        if (notes.length) {
+          setUploadStatus({ phase: "info", message: notes.join("；") });
+          schedule(() => setUploadStatus({ phase: "idle" }), 4200);
+        } else {
+          setUploadStatus({ phase: "idle" });
+        }
+
         pendingImagePickRef.current = imageFiles;
         setContextFileCount(imageFiles.length);
         setContextModalOpen(true);
-      }, 0);
+      })();
     },
     [schedule]
   );
@@ -747,7 +784,12 @@ export function GradingWorkspace({
         schedule(() => setUploadStatus({ phase: "idle" }), 5000);
         return;
       }
-      setTeacherGradeLevel("");
+
+      const entries = entriesForHistoryApply(entry);
+      const startIndex = Math.max(0, entries.findIndex((e) => e.id === entry.id));
+      const isBatch = entries.length > 1;
+
+      setTeacherGradeLevel(entries[0]?.gradeLevel ?? "");
       setTeacherNote("");
       if (previewUrlRef.current?.startsWith("blob:")) safeReleaseObjectUrl(previewUrlRef.current);
       previewUrlRef.current = null;
@@ -755,36 +797,107 @@ export function GradingWorkspace({
       serverPreviewByIndexRef.current = {};
       historyIdByIndexRef.current = {};
       setServerImageUrlByIndex({});
-      setHistoryEntryIdByIndex({ 0: entry.id });
       setSelectedFiles([]);
+      setCachedBatchInsights(null);
+      setHistoryOpen(false);
+
+      const loadBlobPreview = async (historyEntryId: string): Promise<string | null> => {
+        for (let attempt = 0; attempt < 6; attempt += 1) {
+          if (attempt > 0) await new Promise((r) => setTimeout(r, 150));
+          try {
+            const blob = await getHistoryImageBlob(historyEntryId);
+            if (blob) return URL.createObjectURL(blob);
+          } catch {
+            /* ignore */
+          }
+        }
+        return null;
+      };
+
+      if (isBatch) {
+        const results = entries.map((e) => e.detail);
+        const idMap: Record<number, string> = {};
+        const labels = entries.map((e) => historyEntryTitle(e));
+        entries.forEach((e, i) => {
+          idMap[i] = e.id;
+        });
+        setHistoryBatchLabels(labels);
+        setBatchResults(results);
+        setBatchErrors(Array.from({ length: entries.length }, () => null));
+        setGradingProgress({ done: entries.length, total: entries.length });
+        historyIdByIndexRef.current = { ...idMap };
+        setHistoryEntryIdByIndex(idMap);
+        setCurrentFileIndex(startIndex);
+        setResult(entries[startIndex]!.detail);
+        setInsightFileName(labels[startIndex] ?? "");
+        setStep(3);
+        setPreviewUrl(null);
+
+        void (async () => {
+          const urlMap: Record<number, string> = {};
+          for (let i = 0; i < entries.length; i += 1) {
+            const prev = await loadBlobPreview(entries[i]!.id);
+            if (prev) urlMap[i] = prev;
+          }
+          setServerImageUrlByIndex(urlMap);
+          serverPreviewByIndexRef.current = { ...urlMap };
+          const pv = urlMap[startIndex];
+          if (pv) {
+            previewUrlRef.current = pv;
+            setPreviewUrl(pv);
+          }
+        })();
+
+        const groupName = entries[0]?.groupName?.trim();
+        setUploadStatus({
+          phase: "info",
+          message: groupName
+            ? `已载入文件夹批改「${groupName}」共 ${entries.length} 张，可点击下方切换查看。`
+            : `已载入文件夹批改共 ${entries.length} 张，可点击下方切换查看。`,
+        });
+        schedule(() => setUploadStatus({ phase: "idle" }), 4500);
+
+        saveGradingLiveDraft(subject, {
+          imageUrl: "",
+          historyEntryId: entries[startIndex]!.id,
+          detail: entries[startIndex]!.detail,
+          step: 3,
+          fileName: labels[startIndex] ?? "",
+          savedAt: Date.now(),
+          batchItems: entries.map((e) => ({
+            historyEntryId: e.id,
+            fileName: historyEntryTitle(e),
+            detail: e.detail,
+          })),
+          currentIndex: startIndex,
+          groupKey: entries[0]?.groupKey,
+          groupName: entries[0]?.groupName,
+        });
+        return;
+      }
+
+      setHistoryBatchLabels([]);
+      setHistoryEntryIdByIndex({ 0: entry.id });
       setBatchResults([]);
       setBatchErrors([]);
       setCurrentFileIndex(0);
       setGradingProgress({ done: 0, total: 0 });
       setResult(entry.detail);
-      setInsightFileName(entry.fileName);
-      setCachedBatchInsights(null);
+      setInsightFileName(historyEntryTitle(entry));
       setStep(3);
       setPreviewUrl(null);
       void (async () => {
-        try {
-          const blob = await getHistoryImageBlob(entry.id);
-          if (blob) {
-            const u = URL.createObjectURL(blob);
-            if (previewUrlRef.current?.startsWith("blob:")) safeReleaseObjectUrl(previewUrlRef.current);
-            previewUrlRef.current = u;
-            setPreviewUrl(u);
-          }
-        } catch {
-          /* ignore */
+        const blob = await loadBlobPreview(entry.id);
+        if (blob) {
+          previewUrlRef.current = blob;
+          setPreviewUrl(blob);
         }
       })();
       setUploadStatus({
         phase: "info",
-        message: `已载入历史：${entry.fileName}（左侧为存于本机的原图预览，若无图请重新上传对照）`,
+        message: `已载入历史：${historyEntryTitle(entry)}（左侧为存于本机的原图预览，若无图请重新上传对照）`,
       });
       schedule(() => setUploadStatus({ phase: "idle" }), 4000);
-      setHistoryOpen(false);
       saveGradingLiveDraft(subject, {
         imageUrl: "",
         historyEntryId: entry.id,
@@ -825,7 +938,11 @@ export function GradingWorkspace({
     }
     if (st.historyEntryId) {
       const entry = loadGradingHistory().find((e) => e.id === st.historyEntryId);
-      if (entry && entry.subject === subject) {
+      if (entry) {
+        if (entry.subject !== subject) {
+          navigate(gradingPathForEntry(entry), { replace: true, state: { historyEntryId: entry.id } });
+          return;
+        }
         applyHistoryEntry(entry);
       }
       navigate(
@@ -863,6 +980,11 @@ export function GradingWorkspace({
   const startButtonText = selectedFiles.length > 1 ? `开始批改整个文件夹（${selectedFiles.length} 张）` : "开始批改";
   const batchSuccessCount = batchResults.filter(Boolean).length;
   const batchFailCount = batchErrors.filter(Boolean).length;
+  const batchNavLen =
+    selectedFiles.length > 0 ? selectedFiles.length : historyBatchLabels.length > 0 ? historyBatchLabels.length : 0;
+  const showBatchNav = batchNavLen > 1;
+  const batchLabelAt = (index: number) =>
+    selectedFiles[index]?.name ?? historyBatchLabels[index] ?? `第 ${index + 1} 张`;
 
   const currentSubmissionId = submissionIdByIndex[currentFileIndex];
   const currentPublished = publishedByIndex[currentFileIndex];
@@ -902,7 +1024,7 @@ export function GradingWorkspace({
         },
       ];
     }
-    if (selectedFiles.length > 1 && batchResults.length > 0) {
+    if (showBatchNav && batchResults.length > 0) {
       const out: Array<{ fileName: string; detail: GradingResultDetail; studentName?: string }> = [];
       selectedFiles.forEach((file, index) => {
         const detail = batchResults[index];
@@ -1020,7 +1142,12 @@ export function GradingWorkspace({
     [subjectLabel, step]
   );
 
-  const combinedHint = [uploadHint, "可用「选择文件夹」或拖入整个文件夹，批量识别图片。"].filter(Boolean).join(" ");
+  const combinedHint = [
+    uploadHint,
+    "可用「选择文件夹」或拖入整个文件夹，批量识别图片与 PDF（PDF 按页展开）。",
+  ]
+    .filter(Boolean)
+    .join(" ");
 
   const progressPercent = uploadStatus.phase === "uploading" ? uploadStatus.progress : 0;
   const showWorkspaceProgress = uploadStatus.phase === "uploading" && progressPercent >= 0;
@@ -1167,7 +1294,7 @@ export function GradingWorkspace({
                 <input
                   ref={taskFollowUpFileRef}
                   type="file"
-                  accept="image/jpeg,image/png,image/webp,image/bmp,image/gif,.jpg,.jpeg,.png,.webp,.bmp,.gif"
+                  accept={GRADING_UPLOAD_ACCEPT}
                   multiple
                   className="hidden"
                   onChange={(e) => {
@@ -1224,23 +1351,25 @@ export function GradingWorkspace({
                     />
                   </div>
                 </div>
-                {selectedFiles.length > 1 ? (
+                {showBatchNav ? (
                   !isGrading && (batchSuccessCount > 0 || batchFailCount > 0) ? (
                     <div className="glass-tint rounded-card p-4">
                       <div className="flex flex-wrap items-start justify-between gap-3">
                         <div>
                           <p className="text-small font-extrabold text-ink">文件夹批改一览</p>
                           <p className="mt-1 text-caption text-ink-muted">
-                            共 {selectedFiles.length} 张 · 成功 {batchSuccessCount} · 失败 {batchFailCount}。点击下方行切换左侧原图与右侧得分。
+                            共 {batchNavLen} 张 · 成功 {batchSuccessCount} · 失败 {batchFailCount}。点击下方行切换左侧原图与右侧得分。
                           </p>
                         </div>
                       </div>
                       <ul className="scrollbar-primary-mint mt-3 max-h-[min(40vh,16rem)] space-y-1.5 overflow-y-auto overscroll-contain">
-                        {selectedFiles.map((file, index) => {
+                        {Array.from({ length: batchNavLen }, (_, index) => {
                           const r = batchResults[index];
                           const err = batchErrors[index];
+                          const label = batchLabelAt(index);
+                          const file = selectedFiles[index];
                           return (
-                            <li key={`${file.name}-${file.size}-${index}`}>
+                            <li key={file ? `${file.name}-${file.size}-${index}` : `hist-${label}-${index}`}>
                               <button
                                 type="button"
                                 onClick={() => selectPreviewFile(index)}
@@ -1252,7 +1381,7 @@ export function GradingWorkspace({
                                 ].join(" ")}
                               >
                                 <span className="min-w-0 flex-1 truncate font-semibold text-ink">
-                                  {index + 1}. {file.name}
+                                  {index + 1}. {label}
                                 </span>
                                 {r ? (
                                   <span className="shrink-0 tabular-nums font-black text-[#006D41]">{r.scorePercent}%</span>
@@ -1270,13 +1399,13 @@ export function GradingWorkspace({
                   ) : (
                     <div className="rounded-card border border-black/[0.06] bg-white/85 p-3 shadow-sm">
                       <p className="mb-2 text-caption font-bold text-ink-muted">
-                        文件夹图片 · 已识别 {selectedFiles.length} 张
+                        文件夹图片 · 共 {batchNavLen} 张
                         {batchSuccessCount || batchFailCount ? ` · 成功 ${batchSuccessCount} 张，失败 ${batchFailCount} 张` : ""}
                       </p>
                       <div className="flex gap-2 overflow-x-auto pb-1">
-                        {selectedFiles.map((file, index) => (
+                        {Array.from({ length: batchNavLen }, (_, index) => (
                           <button
-                            key={`${file.name}-${file.size}-${index}`}
+                            key={`batch-tab-${index}-${batchLabelAt(index)}`}
                             type="button"
                             onClick={() => selectPreviewFile(index)}
                             className={[
@@ -1291,7 +1420,7 @@ export function GradingWorkspace({
                             ].join(" ")}
                           >
                             {batchResults[index] ? "已批改 · " : batchErrors[index] ? "失败 · " : ""}
-                            {index + 1}. {file.name}
+                            {index + 1}. {batchLabelAt(index)}
                           </button>
                         ))}
                       </div>

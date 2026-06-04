@@ -10,7 +10,7 @@ import {
   GradingHistoryDeleteConfirmDialog,
   type GradingHistoryDeleteKind,
 } from "@/components/molecules/GradingHistoryDeleteConfirmDialog";
-import { withAuthSlot } from "@/lib/authSlot";
+import { gradingPath, gradingPathForEntry } from "@/lib/teacherRoutes";
 import {
   buildGroupedHistoryRows,
   clearGradingHistoryForSubject,
@@ -305,9 +305,18 @@ function GroupHistoryCard({
         <p className="text-small font-extrabold text-[#006D41]">
           {row.groupName ? `${row.groupName} · ${row.items.length} 张` : `文件夹批改 · ${row.items.length} 张`}
         </p>
-        <span className="shrink-0 rounded-full bg-white px-2.5 py-0.5 text-[0.65rem] font-black text-[#006D41] ring-1 ring-primary/20">
-          均分 {Math.round(row.items.reduce((s, i) => s + i.detail.scorePercent, 0) / row.items.length)}%
-        </span>
+        <div className="flex shrink-0 flex-wrap items-center gap-2">
+          <span className="rounded-full bg-white px-2.5 py-0.5 text-[0.65rem] font-black text-[#006D41] ring-1 ring-primary/20">
+            均分 {Math.round(row.items.reduce((s, i) => s + i.detail.scorePercent, 0) / row.items.length)}%
+          </span>
+          <button
+            type="button"
+            onClick={() => onApply(row.items[0]!)}
+            className="rounded-lg bg-white px-2 py-1 text-[0.65rem] font-bold text-[#006D41] ring-1 ring-primary/20 hover:bg-primary-tint/50"
+          >
+            打开整组
+          </button>
+        </div>
       </div>
       <div className="mt-1.5 flex flex-wrap gap-1.5">
         <span className="rounded-full bg-white/90 px-2 py-0.5 text-[0.6rem] font-semibold text-[#006D41] ring-1 ring-primary/15">
@@ -508,9 +517,7 @@ export function GradingHistoryEmbeddedPanel({ historyEntries }: GradingHistoryEm
 
   const onApplyEntry = useCallback(
     (entry: GradingHistoryEntry) => {
-      const path =
-        entry.subject === "english" ? "/english" : entry.subject === "chinese" ? "/chinese" : "/math";
-      navigate(withAuthSlot(path), { state: { historyEntryId: entry.id } });
+      navigate(gradingPathForEntry(entry), { state: { historyEntryId: entry.id } });
     },
     [navigate],
   );
@@ -541,7 +548,7 @@ export function GradingHistoryEmbeddedPanel({ historyEntries }: GradingHistoryEm
             </button>
           ))}
           <AppLink
-            to={subject === "english" ? "/english" : subject === "chinese" ? "/chinese" : "/math"}
+            to={gradingPath(subject)}
             className="ml-auto text-caption font-bold text-brand hover:underline"
           >
             打开{subjectLabel}批改页 →

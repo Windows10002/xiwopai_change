@@ -7,7 +7,13 @@ import { ChevronDown, Clock } from "lucide-react";
 import { AppLink } from "@/components/atoms/AppLink";
 import { CUTE_ICON } from "@/components/atoms/cuteIcon";
 import { withAuthSlot } from "@/lib/authSlot";
-import { buildGroupedHistoryRows, loadGradingHistory, type HistoryDisplayRow } from "@/lib/gradingHistory";
+import {
+  buildGroupedHistoryRows,
+  historyEntryFromRow,
+  loadGradingHistory,
+  type HistoryDisplayRow,
+} from "@/lib/gradingHistory";
+import { gradingPath, type GradingSubject } from "@/lib/teacherRoutes";
 
 export type HistoryDropdownVariant = "nav" | "toolbar";
 
@@ -49,128 +55,121 @@ function computeFloatingMenuStyle(trigger: HTMLElement): CSSProperties {
   };
 }
 
+const SUBJECT_SECTION: Record<
+  GradingSubject,
+  { label: string; titleClass: string; scoreClass: string; rowHover: string; empty: string }
+> = {
+  math: {
+    label: "数学",
+    titleClass: "text-[#006D41]",
+    scoreClass: "text-[#006D41]",
+    rowHover: "hover:border-brand/35 hover:bg-primary-tint/40",
+    empty: "暂无数学记录",
+  },
+  english: {
+    label: "英语",
+    titleClass: "text-indigo-800",
+    scoreClass: "text-indigo-800",
+    rowHover: "hover:border-indigo-200 hover:bg-indigo-50/60",
+    empty: "暂无英语记录",
+  },
+  chinese: {
+    label: "语文",
+    titleClass: "text-amber-900",
+    scoreClass: "text-amber-900",
+    rowHover: "hover:border-amber-200 hover:bg-amber-50/70",
+    empty: "暂无语文记录",
+  },
+};
+
 type HistoryMenuPanelProps = {
   subjectScope: HistoryDropdownProps["subjectScope"];
-  mathRows: HistoryDisplayRow[];
-  engRows: HistoryDisplayRow[];
+  rowsBySubject: Record<GradingSubject, HistoryDisplayRow[]>;
   rowLabel: (row: HistoryDisplayRow) => string;
   rowPct: (row: HistoryDisplayRow) => string;
   onClose: () => void;
-  onGoMathPanel: () => void;
-  onGoEnglishPanel: () => void;
-  onPickMath: (row: HistoryDisplayRow) => void;
-  onPickEnglish: (row: HistoryDisplayRow) => void;
+  onGoPanel: (subject: GradingSubject) => void;
+  onPickRow: (row: HistoryDisplayRow) => void;
 };
 
 function HistoryMenuPanel({
   subjectScope,
-  mathRows,
-  engRows,
+  rowsBySubject,
   rowLabel,
   rowPct,
   onClose,
-  onGoMathPanel,
-  onGoEnglishPanel,
-  onPickMath,
-  onPickEnglish,
+  onGoPanel,
+  onPickRow,
 }: HistoryMenuPanelProps) {
+  const sections: GradingSubject[] =
+    subjectScope === "all"
+      ? ["math", "english", "chinese"]
+      : [subjectScope === "english" ? "english" : subjectScope === "chinese" ? "chinese" : "math"];
+
+  const scopeHint =
+    subjectScope === "all"
+      ? "本机保存 · 按学科分区，点击打开对应批改页"
+      : `本机保存 · 仅${SUBJECT_SECTION[sections[0]!].label}作业`;
+
   return (
     <>
       <div className="shrink-0 border-b border-black/[0.06] bg-gradient-to-r from-primary-tint/80 to-white px-4 py-3">
         <p className="text-small font-extrabold text-ink">最近批改</p>
-        <p className="mt-0.5 text-[0.65rem] leading-relaxed text-ink-muted">
-          {subjectScope === "all"
-            ? "本机保存 · 数学与英语分区展示"
-            : subjectScope === "math"
-              ? "本机保存 · 仅数学作业"
-              : "本机保存 · 仅英语作文"}
-        </p>
+        <p className="mt-0.5 text-[0.65rem] leading-relaxed text-ink-muted">{scopeHint}</p>
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-3">
-        {subjectScope !== "english" ? (
-          <div className={subjectScope === "all" ? "mb-3" : ""}>
-            {subjectScope === "all" ? (
-              <div className="mb-1.5 flex items-center justify-between">
-                <span className="text-[0.7rem] font-extrabold text-[#006D41]">数学</span>
-                <button type="button" onClick={onGoMathPanel} className="text-[0.65rem] font-bold text-brand hover:underline">
-                  打开数学批改页
+        {sections.map((sub, idx) => {
+          const ui = SUBJECT_SECTION[sub];
+          const rows = rowsBySubject[sub];
+          const showHeader = subjectScope === "all";
+          const singleScope = subjectScope !== "all";
+          return (
+            <div key={sub} className={idx > 0 && showHeader ? "mt-3" : ""}>
+              {showHeader ? (
+                <div className="mb-1.5 flex items-center justify-between">
+                  <span className={`text-[0.7rem] font-extrabold ${ui.titleClass}`}>{ui.label}</span>
+                  <button
+                    type="button"
+                    onClick={() => onGoPanel(sub)}
+                    className="text-[0.65rem] font-bold text-brand hover:underline"
+                  >
+                    打开{ui.label}批改页
+                  </button>
+                </div>
+              ) : null}
+              {rows.length === 0 ? (
+                <p className="rounded-lg bg-surface-page px-2 py-2 text-[0.7rem] text-ink-muted">{ui.empty}</p>
+              ) : (
+                <ul className="space-y-1">
+                  {rows.map((row) => (
+                    <li key={row.type === "single" ? row.entry.id : row.groupKey}>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          onClose();
+                          onPickRow(row);
+                        }}
+                        className={`flex w-full items-center justify-between gap-2 rounded-xl border border-black/[0.06] bg-white px-2.5 py-2 text-left text-[0.7rem] transition ${ui.rowHover}`}
+                      >
+                        <span className="min-w-0 flex-1 truncate font-semibold text-ink">{rowLabel(row)}</span>
+                        <span className={`shrink-0 font-black ${ui.scoreClass}`}>{rowPct(row)}</span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {singleScope ? (
+                <button
+                  type="button"
+                  onClick={() => onGoPanel(sub)}
+                  className="mt-2 w-full rounded-xl border border-black/[0.06] bg-surface-page py-2 text-[0.7rem] font-bold text-brand transition hover:bg-primary-tint/50"
+                >
+                  在批改页侧栏查看全部
                 </button>
-              </div>
-            ) : null}
-            {mathRows.length === 0 ? (
-              <p className="rounded-lg bg-surface-page px-2 py-2 text-[0.7rem] text-ink-muted">暂无数学记录</p>
-            ) : (
-              <ul className="space-y-1">
-                {mathRows.map((row) => (
-                  <li key={row.type === "single" ? row.entry.id : row.groupKey}>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        onClose();
-                        onPickMath(row);
-                      }}
-                      className="flex w-full items-center justify-between gap-2 rounded-xl border border-black/[0.06] bg-white px-2.5 py-2 text-left text-[0.7rem] transition hover:border-brand/35 hover:bg-primary-tint/40"
-                    >
-                      <span className="min-w-0 flex-1 truncate font-semibold text-ink">{rowLabel(row)}</span>
-                      <span className="shrink-0 font-black text-[#006D41]">{rowPct(row)}</span>
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
-            {subjectScope === "math" ? (
-              <button
-                type="button"
-                onClick={onGoMathPanel}
-                className="mt-2 w-full rounded-xl border border-black/[0.06] bg-surface-page py-2 text-[0.7rem] font-bold text-brand transition hover:bg-primary-tint/50"
-              >
-                在批改页侧栏查看全部
-              </button>
-            ) : null}
-          </div>
-        ) : null}
-        {subjectScope !== "math" ? (
-          <div>
-            {subjectScope === "all" ? (
-              <div className="mb-1.5 flex items-center justify-between">
-                <span className="text-[0.7rem] font-extrabold text-indigo-800">英语</span>
-                <button type="button" onClick={onGoEnglishPanel} className="text-[0.65rem] font-bold text-brand hover:underline">
-                  打开英语批改页
-                </button>
-              </div>
-            ) : null}
-            {engRows.length === 0 ? (
-              <p className="rounded-lg bg-surface-page px-2 py-2 text-[0.7rem] text-ink-muted">暂无英语记录</p>
-            ) : (
-              <ul className="space-y-1">
-                {engRows.map((row) => (
-                  <li key={row.type === "single" ? row.entry.id : row.groupKey}>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        onClose();
-                        onPickEnglish(row);
-                      }}
-                      className="flex w-full items-center justify-between gap-2 rounded-xl border border-black/[0.06] bg-white px-2.5 py-2 text-left text-[0.7rem] transition hover:border-indigo-200 hover:bg-indigo-50/60"
-                    >
-                      <span className="min-w-0 flex-1 truncate font-semibold text-ink">{rowLabel(row)}</span>
-                      <span className="shrink-0 font-black text-indigo-800">{rowPct(row)}</span>
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
-            {subjectScope === "english" ? (
-              <button
-                type="button"
-                onClick={onGoEnglishPanel}
-                className="mt-2 w-full rounded-xl border border-black/[0.06] bg-surface-page py-2 text-[0.7rem] font-bold text-brand transition hover:bg-indigo-50/80"
-              >
-                在批改页侧栏查看全部
-              </button>
-            ) : null}
-          </div>
-        ) : null}
+              ) : null}
+            </div>
+          );
+        })}
       </div>
     </>
   );
@@ -210,8 +209,11 @@ export function HistoryDropdown({ variant = "nav", subjectScope = "all", require
   const menuRef = useRef<HTMLDivElement | null>(null);
   const [menuStyle, setMenuStyle] = useState<CSSProperties | null>(null);
   const useFloatingMenu = variant === "toolbar";
-  const [mathRows, setMathRows] = useState<HistoryDisplayRow[]>([]);
-  const [engRows, setEngRows] = useState<HistoryDisplayRow[]>([]);
+  const [rowsBySubject, setRowsBySubject] = useState<Record<GradingSubject, HistoryDisplayRow[]>>({
+    math: [],
+    english: [],
+    chinese: [],
+  });
 
   const close = useCallback(() => setOpen(false), []);
 
@@ -226,18 +228,19 @@ export function HistoryDropdown({ variant = "nav", subjectScope = "all", require
     const math = buildGroupedHistoryRows(all.filter((e) => e.subject === "math"));
     const eng = buildGroupedHistoryRows(all.filter((e) => e.subject === "english"));
     const chinese = buildGroupedHistoryRows(all.filter((e) => e.subject === "chinese"));
+    const limit = subjectScope === "all" ? 8 : 12;
     if (subjectScope === "all") {
-      setMathRows(math.slice(0, 8));
-      setEngRows(eng.slice(0, 8));
+      setRowsBySubject({
+        math: math.slice(0, limit),
+        english: eng.slice(0, limit),
+        chinese: chinese.slice(0, limit),
+      });
     } else if (subjectScope === "math") {
-      setMathRows(math.slice(0, 12));
-      setEngRows([]);
+      setRowsBySubject({ math: math.slice(0, limit), english: [], chinese: [] });
     } else if (subjectScope === "chinese") {
-      setMathRows(chinese.slice(0, 12));
-      setEngRows([]);
+      setRowsBySubject({ math: [], english: [], chinese: chinese.slice(0, limit) });
     } else {
-      setMathRows([]);
-      setEngRows(eng.slice(0, 12));
+      setRowsBySubject({ math: [], english: eng.slice(0, limit), chinese: [] });
     }
   }, [open, subjectScope]);
 
@@ -247,7 +250,7 @@ export function HistoryDropdown({ variant = "nav", subjectScope = "all", require
       return;
     }
     if (useFloatingMenu) placeFloatingMenu();
-  }, [open, useFloatingMenu, placeFloatingMenu, mathRows.length, engRows.length]);
+  }, [open, useFloatingMenu, placeFloatingMenu, rowsBySubject.math.length, rowsBySubject.english.length, rowsBySubject.chinese.length]);
 
   useEffect(() => {
     if (!open || !useFloatingMenu) return;
@@ -271,29 +274,19 @@ export function HistoryDropdown({ variant = "nav", subjectScope = "all", require
     return () => document.removeEventListener("mousedown", onDoc);
   }, [open]);
 
-  const goMathPanel = () => {
+  const goPanel = (sub: GradingSubject) => {
     close();
-    navigate("/math", { state: { openGradingHistory: true } });
+    navigate(gradingPath(sub), { state: { openGradingHistory: true } });
   };
 
-  const goEnglishPanel = () => {
-    close();
-    navigate("/english", { state: { openGradingHistory: true } });
-  };
-
-  const pickMath = (row: HistoryDisplayRow) => {
+  const pickRow = (row: HistoryDisplayRow) => {
+    const entry = historyEntryFromRow(row);
+    if (!entry) return;
+    const path = gradingPath(entry.subject);
     if (row.type === "single") {
-      navigate("/math", { state: { historyEntryId: row.entry.id } });
+      navigate(path, { state: { historyEntryId: entry.id } });
     } else {
-      navigate("/math", { state: { historyEntryId: row.items[0]?.id, openGradingHistory: true } });
-    }
-  };
-
-  const pickEnglish = (row: HistoryDisplayRow) => {
-    if (row.type === "single") {
-      navigate("/english", { state: { historyEntryId: row.entry.id } });
-    } else {
-      navigate("/english", { state: { historyEntryId: row.items[0]?.id, openGradingHistory: true } });
+      navigate(path, { state: { historyEntryId: entry.id, openGradingHistory: true } });
     }
   };
 
@@ -310,15 +303,12 @@ export function HistoryDropdown({ variant = "nav", subjectScope = "all", require
 
   const panelProps: HistoryMenuPanelProps = {
     subjectScope,
-    mathRows,
-    engRows,
+    rowsBySubject,
     rowLabel,
     rowPct,
     onClose: close,
-    onGoMathPanel: goMathPanel,
-    onGoEnglishPanel: goEnglishPanel,
-    onPickMath: pickMath,
-    onPickEnglish: pickEnglish,
+    onGoPanel: goPanel,
+    onPickRow: pickRow,
   };
 
   const shellClass =

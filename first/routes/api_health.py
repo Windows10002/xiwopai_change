@@ -6,6 +6,7 @@ import os
 from flask import Blueprint, current_app, jsonify
 
 from core.auth import current_user, has_permission, require_auth
+from core.moonshot_client import moonshot_configured
 from routes.spa import spa_built
 
 health_bp = Blueprint("health", __name__)
@@ -42,6 +43,8 @@ def api_health():
             "feedback_records": feedback_n,
             "dispute_records": dispute_n,
             "dispute_pending": pending,
+            "moonshot_configured": moonshot_configured(),
+            "grading_llm": "moonshot" if moonshot_configured() else ("dashscope" if os.getenv("DASHSCOPE_API_KEY", "").strip() else "none"),
             "dashscope_configured": bool(os.getenv("DASHSCOPE_API_KEY", "").strip()),
         }
     )

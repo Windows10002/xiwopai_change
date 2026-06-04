@@ -1,4 +1,5 @@
 import { withAuthSlot } from "@/lib/authSlot";
+import type { GradingHistoryEntry } from "@/lib/gradingHistory";
 import type { WorkspaceAssignment } from "@/lib/workspaceApi";
 
 export type WorkspaceTabId = "homework" | "exams" | "review";
@@ -8,9 +9,20 @@ export function workspacePath(tab?: WorkspaceTabId): string {
   return withAuthSlot(base);
 }
 
-export function gradingPath(subject: WorkspaceAssignment["subject"]): string {
-  const map = { math: "/math", english: "/english", chinese: "/chinese" } as const;
-  return withAuthSlot(map[subject] ?? "/math");
+export type GradingSubject = WorkspaceAssignment["subject"];
+
+const GRADING_PATH: Record<GradingSubject, string> = {
+  math: "/math",
+  english: "/english",
+  chinese: "/chinese",
+};
+
+export function gradingPath(subject: GradingSubject): string {
+  return withAuthSlot(GRADING_PATH[subject] ?? "/math");
+}
+
+export function gradingPathForEntry(entry: Pick<GradingHistoryEntry, "subject">): string {
+  return gradingPath(entry.subject);
 }
 
 export type LinkAssignmentState = {

@@ -170,16 +170,26 @@ def _call_llm_insights(
     student_name: str = "",
 ) -> dict[str, Any] | None:
     try:
-        import dashscope
-        from http import HTTPStatus
+        from core.moonshot_client import moonshot_configured, moonshot_text_chat
     except ImportError:
-        return None
+        moonshot_configured = lambda: False  # type: ignore
+        moonshot_text_chat = None  # type: ignore
 
-    api_key = os.getenv("DASHSCOPE_API_KEY", "").strip()
-    if api_key:
-        dashscope.api_key = api_key
-    if not getattr(dashscope, "api_key", None):
-        return None
+    use_moonshot = moonshot_configured()
+    dashscope = None
+    if not use_moonshot:
+        try:
+            import dashscope as _dashscope
+            from http import HTTPStatus
+
+            dashscope = _dashscope
+        except ImportError:
+            return None
+        api_key = os.getenv("DASHSCOPE_API_KEY", "").strip()
+        if api_key:
+            dashscope.api_key = api_key
+        if not getattr(dashscope, "api_key", None):
+            return None
 
     subj_cn = "数学" if subject == "math" else "英语作文"
     scope = "单名学生多次作业" if analysis_mode == "student_personalized" and student_name else "一批作业"
@@ -227,17 +237,28 @@ def _call_llm_insights(
 变形题 3～6 道，须贴合薄弱点。"""
 
     try:
-        resp = dashscope.Generation.call(
-            model=os.getenv("DASHSCOPE_TEXT_MODEL", "qwen-plus"),
-            messages=[{"role": "user", "content": prompt}],
-            result_format="message",
-        )
-        if getattr(resp, "status_code", None) != HTTPStatus.OK:
-            return None
-        content = resp.output.choices[0].message.content
-        if isinstance(content, list):
-            content = content[0].get("text", "") if content else ""
-        m = re.search(r"\{.*\}", str(content), re.DOTALL)
+        content_str: str | None = None
+        if use_moonshot and moonshot_text_chat is not None:
+            content_str, err = moonshot_text_chat(prompt, temperature=0.3)
+            if err or not content_str:
+                return None
+        else:
+            from http import HTTPStatus
+
+            resp = dashscope.Generation.call(
+                model=os.getenv("DASHSCOPE_TEXT_MODEL", "qwen-plus"),
+                messages=[{"role": "user", "content": prompt}],
+                result_format="message",
+            )
+            if getattr(resp, "status_code", None) != HTTPStatus.OK:
+                return None
+            content = resp.output.choices[0].message.content
+            if isinstance(content, list):
+                content_str = content[0].get("text", "") if content else ""
+            else:
+                content_str = str(content or "")
+
+        m = re.search(r"\{.*\}", str(content_str), re.DOTALL)
         if not m:
             return None
         parsed = json.loads(m.group())

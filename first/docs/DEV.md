@@ -34,7 +34,19 @@ npm run dev
 
 学生端要点：首页「π 助学」(`/pi-tutor`) 可分析错题、提问不会的题；「π 奖励」(`/rewards`) 按准确率获徽章；学习台五色与下方三科卡片配色错开；「我的作业」支持 `?tab=work|variants`。
 
-π 智能助手方案见 [PI_ASSISTANT.md](./PI_ASSISTANT.md)。智能问答使用 [Agnes](https://platform.agnes-ai.com/)（`.env` 中 `AGNES_API_KEY`），与批改 `DASHSCOPE_API_KEY` 分离；在设置或 π 抽屉切换「智能问答」模式。
+三科批改页（`/math`、`/english`、`/chinese`）上传区支持 **PDF**：浏览器内按页转为 JPEG 后走原有批改接口（单份 PDF 最多解析前 30 页）。待办交卷仍仅支持图片。
+
+π 智能助手方案见 [PI_ASSISTANT.md](./PI_ASSISTANT.md)。智能问答使用 [Agnes](https://platform.agnes-ai.com/)（`.env` 中 `AGNES_API_KEY`），与批改分离；在设置或 π 抽屉切换「智能问答」模式。
+
+**批改 AI（数学 / 语文 / 英语作文）** 默认走 [Moonshot Kimi](https://platform.moonshot.cn/) OpenAI 兼容接口：
+
+```env
+MOONSHOT_API_KEY=sk-你的密钥
+MOONSHOT_API_BASE=https://api.moonshot.cn/v1
+MOONSHOT_VISION_MODEL=kimi-k2.6
+```
+
+配置后需 `pip install openai` 并**重启后端**。未配置 `MOONSHOT_API_KEY` 时回退 `DASHSCOPE_API_KEY`（通义千问视觉）。健康检查详情接口可见 `grading_llm: moonshot | dashscope | none`。
 
 小学及以下学生登录确认码（演示）：`HW-ALLOW`
 

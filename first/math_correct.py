@@ -37,7 +37,7 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(me
 
 # ================= 2. 配置区 =================
 if dashscope is not None:
-    dashscope.api_key = os.getenv("DASHSCOPE_API_KEY", "sk-bd9f8ad136bc435e8414a14478a565f4")
+    dashscope.api_key = os.getenv("DASHSCOPE_API_KEY", "")
 MATH_FOLDER = "img_math"
 OUTPUT_EXCEL = "数学作业批改报告.xlsx"
 OUTPUT_TXT = "数学作业批改报告.txt"
@@ -3234,8 +3234,15 @@ def call_ai_math(
     answer_key_image: str = "",
     scoring_rubric: str = "",
 ) -> dict:
-    if dashscope is None:
-        logging.error("dashscope 未安装，无法调用视觉批改 API")
+    try:
+        from core.moonshot_client import moonshot_configured, moonshot_vision_chat
+    except ImportError:
+        moonshot_configured = lambda: False  # type: ignore
+        moonshot_vision_chat = None  # type: ignore
+
+    use_moonshot = moonshot_configured()
+    if not use_moonshot and dashscope is None:
+        logging.error("未配置 MOONSHOT_API_KEY，且 dashscope 未安装，无法调用视觉批改 API")
         return None
     try:
         with open(image_path, "rb") as f:
@@ -3260,23 +3267,39 @@ def call_ai_math(
         content.append({"text": MATH_PROMPT + suffix})
         messages = [{"role": "user", "content": content}]
 
-        # max_length 提高可减少「只返回前几题 JSON」被截断的情况（长卷多题须完整输出 questions）
-        resp = dashscope.MultiModalConversation.call(
-            model="qwen-vl-max",
-            messages=messages,
-            timeout=120,
-            max_length=8192,
-            temperature=0.05,
-            top_p=0.3,
-        )
-        if resp.status_code == HTTPStatus.OK:
-            raw = resp.output.choices[0].message.content[0]["text"]
+        raw: str | None = None
+        if use_moonshot and moonshot_vision_chat is not None:
+            raw, err = moonshot_vision_chat(
+                content,
+                temperature=0.05,
+                max_tokens=8192,
+                timeout=120,
+            )
+            if err:
+                logging.error(f"Kimi 批改失败：{err}")
+                return None
+        else:
+            # 兼容：未配置 Moonshot 时回退 DashScope
+            resp = dashscope.MultiModalConversation.call(
+                model=os.getenv("DASHSCOPE_VL_MODEL", "qwen-vl-max"),
+                messages=messages,
+                timeout=120,
+                max_length=8192,
+                temperature=0.05,
+                top_p=0.3,
+            )
+            if resp.status_code == HTTPStatus.OK:
+                raw = resp.output.choices[0].message.content[0]["text"]
+            else:
+                logging.error(f"DashScope API 失败：{resp.status_code} | {resp.message}")
+                return None
+
+        if raw:
             try:
                 return normalize_math_result(json.loads(extract_json_safe(raw)))
             except Exception as norm_err:
                 logging.error(f"结果规范化失败：{norm_err}", exc_info=True)
                 return None
-        logging.error(f"API 失败：{resp.status_code} | {resp.message}")
         return None
     except Exception as e:
         logging.error(f"处理异常：{e}", exc_info=True)

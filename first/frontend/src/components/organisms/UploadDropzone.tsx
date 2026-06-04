@@ -2,15 +2,12 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { CheckCircle2, CircleX, ClipboardList, FolderOpen, ImagePlus, UploadCloud } from "lucide-react";
 import { CUTE_ICON } from "@/components/atoms/cuteIcon";
 import { IpMascotLoading, IpMascotPointGuide } from "@/components/atoms/IpMascot";
+import {
+  GRADING_UPLOAD_ACCEPT,
+  GRADING_UPLOAD_HINT,
+  isAllowedGradingUploadFile,
+} from "@/lib/gradingUploadFiles";
 import type { UploadPanelStatus } from "@/types/grading";
-
-const ALLOWED_IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "image/bmp", "image/gif"]);
-const ALLOWED_IMAGE_EXTENSIONS = new Set(["jpg", "jpeg", "png", "webp", "bmp", "gif"]);
-
-function isAllowedImageFile(file: File): boolean {
-  const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
-  return ALLOWED_IMAGE_TYPES.has(file.type) || ALLOWED_IMAGE_EXTENSIONS.has(ext);
-}
 
 /** 递归读取拖入的文件夹（Chrome/Edge 等）；仅 webkitGetAsEntry 可用时走此路径 */
 async function readAllDirectoryEntries(reader: FileSystemDirectoryReader): Promise<FileSystemEntry[]> {
@@ -30,7 +27,7 @@ async function collectImageFilesFromEntry(entry: FileSystemEntry, out: File[]): 
     const file = await new Promise<File>((resolve, reject) => {
       (entry as FileSystemFileEntry).file(resolve, reject);
     });
-    if (isAllowedImageFile(file)) out.push(file);
+    if (isAllowedGradingUploadFile(file)) out.push(file);
     return;
   }
   const dir = entry as FileSystemDirectoryEntry;
@@ -40,12 +37,12 @@ async function collectImageFilesFromEntry(entry: FileSystemEntry, out: File[]): 
 
 async function filesFromDataTransferRoots(roots: FileSystemEntry[], dt: DataTransfer): Promise<File[]> {
   if (!roots.length) {
-    return Array.from(dt.files).filter(isAllowedImageFile);
+    return Array.from(dt.files).filter(isAllowedGradingUploadFile);
   }
   const collected: File[] = [];
   await Promise.all(roots.map((r) => collectImageFilesFromEntry(r, collected)));
   if (collected.length) return collected;
-  return Array.from(dt.files).filter(isAllowedImageFile);
+  return Array.from(dt.files).filter(isAllowedGradingUploadFile);
 }
 
 /** 必须在 drop 事件同步阶段调用：拖文件夹时异步后再读 dataTransfer / webkitGetAsEntry 会失效 */
@@ -69,7 +66,7 @@ function captureFileSystemRootsSync(dt: DataTransfer): FileSystemEntry[] {
 async function collectFromFileSystemHandle(handle: FileSystemHandle, out: File[]): Promise<void> {
   if (handle.kind === "file") {
     const file = await (handle as FileSystemFileHandle).getFile();
-    if (isAllowedImageFile(file)) out.push(file);
+    if (isAllowedGradingUploadFile(file)) out.push(file);
     return;
   }
   const dir = handle as FileSystemDirectoryHandle;
@@ -117,7 +114,7 @@ type UploadDropzoneProps = {
  */
 export function UploadDropzone({
   title = "拖放照片到此处",
-  hint = "支持 JPG / PNG / WebP；建议正对纸张、光线均匀。",
+  hint = GRADING_UPLOAD_HINT,
   onFiles,
   onPickFromPublishedTask,
   status = { phase: "idle" },
@@ -203,7 +200,7 @@ export function UploadDropzone({
           } else {
             const fromHandles = await filesFromDataTransferHandles(dt);
             if (fromHandles?.length) list = fromHandles;
-            else list = Array.from(dt.files).filter(isAllowedImageFile);
+            else list = Array.from(dt.files).filter(isAllowedGradingUploadFile);
           }
           if (!list.length) {
             onFiles?.(dt.files);
@@ -283,7 +280,7 @@ export function UploadDropzone({
     <div
       role="group"
       tabIndex={outerTabIndex}
-      aria-label="点击选择作业图片或文件夹，也可以拖拽图片或文件夹到这里；或使用下方快捷按钮直接选择。"
+      aria-label="点击选择作业图片、PDF 或文件夹，也可以拖拽到这里；或使用下方快捷按钮直接选择。"
       onClick={(e) => {
         if (locked || busy || sourcePickerOpen) return;
         /* 仅点到虚线框自身的留白时打开弹层；其它区域由各自子块处理，避免与「选择图片/文件夹」抢事件 */
@@ -328,8 +325,10 @@ export function UploadDropzone({
             ref={pickerPanelRef}
             className="glass-panel relative z-[30] w-full min-w-[17.5rem] max-w-sm select-none rounded-2xl p-5"
           >
-            <p className="text-center text-small font-extrabold text-ink">如何添加作业照片？</p>
-            <p className="mt-1 text-center text-caption leading-relaxed text-ink-muted">可选多张图片，或一次选择整个文件夹（仅图片）。</p>
+            <p className="text-center text-small font-extrabold text-ink">如何添加作业？</p>
+            <p className="mt-1 text-center text-caption leading-relaxed text-ink-muted">
+              可选多张图片或 PDF；文件夹内图片与 PDF 均可识别。
+            </p>
             <div className="mt-4 flex flex-col gap-2">
               <button
                 type="button"
@@ -340,7 +339,7 @@ export function UploadDropzone({
                 className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-brand px-4 py-3 text-caption font-bold text-white shadow-sm transition hover:-translate-y-0.5 hover:bg-[#36A814]"
               >
                 <UploadCloud className="h-4 w-4" {...CUTE_ICON} aria-hidden />
-                选择图片（可多选）
+                选择图片或 PDF（可多选）
               </button>
               <button
                 type="button"
@@ -386,7 +385,7 @@ export function UploadDropzone({
       <input
         ref={fileInputRef}
         type="file"
-        accept="image/jpeg,image/png,image/webp,image/bmp,image/gif,.jpg,.jpeg,.png,.webp,.bmp,.gif"
+        accept={GRADING_UPLOAD_ACCEPT}
         multiple
         className="hidden"
         onChange={(e) => {
@@ -397,7 +396,7 @@ export function UploadDropzone({
       <input
         ref={folderInputRef}
         type="file"
-        accept="image/jpeg,image/png,image/webp,image/bmp,image/gif,.jpg,.jpeg,.png,.webp,.bmp,.gif"
+        accept={GRADING_UPLOAD_ACCEPT}
         multiple
         className="hidden"
         {...({ webkitdirectory: "" } as object)}
@@ -482,7 +481,7 @@ export function UploadDropzone({
               >
                 {dragging
                   ? "松开鼠标即可上传；边框加粗、底色微亮表示已进入拖拽区域。"
-                  : "点上方说明区或底部 π 提示可打开添加方式；点「选择图片」「选择文件夹」直接打开系统选择；两按钮之间的空白也可打开添加方式。支持拖入。"}
+                  : "点上方说明区或底部 π 提示可打开添加方式；点「选择图片或 PDF」「选择文件夹」直接打开系统选择；两按钮之间的空白也可打开添加方式。支持拖入。"}
                 {onPickFromPublishedTask
                   ? " 教师还可「选择从发布的任务中提交」，将批改关联到已发布任务。"
                   : ""}
@@ -506,7 +505,7 @@ export function UploadDropzone({
               className="inline-flex items-center gap-2 rounded-full bg-brand px-4 py-2 text-caption font-bold text-white shadow-sm transition hover:-translate-y-0.5 hover:bg-[#36A814]"
             >
               <UploadCloud className="h-4 w-4 pointer-events-none" {...CUTE_ICON} aria-hidden />
-              选择图片
+              选择图片或 PDF
             </button>
             <button
               type="button"
@@ -547,7 +546,7 @@ export function UploadDropzone({
           >
             <IpMascotPointGuide className="h-14 w-14 shrink-0 opacity-95 pointer-events-none" />
             <p className="text-caption leading-relaxed text-ink-muted">
-              π 指着上方上传区：先把清晰作业照放进来，我再帮你批改～
+              π 指着上方上传区：照片或 PDF 作业放进来，我再帮你批改～
             </p>
           </div>
           ) : null}

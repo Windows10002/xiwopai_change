@@ -37,7 +37,13 @@ FLASK_PORT = int(os.getenv("FLASK_PORT", "50003"))
 
 BATCH_GRADE_CONCURRENCY = max(1, min(4, int(os.getenv("BATCH_GRADE_CONCURRENCY", "2"))))
 
-# π 助手 LLM（Agnes OpenAI 兼容 API，与批改 DashScope 分离）
+# 批改 / 学情 LLM（Moonshot Kimi，OpenAI 兼容）
+MOONSHOT_API_BASE = os.getenv("MOONSHOT_API_BASE", "https://api.moonshot.cn/v1").rstrip("/")
+MOONSHOT_API_KEY = os.getenv("MOONSHOT_API_KEY", "").strip()
+MOONSHOT_VISION_MODEL = os.getenv("MOONSHOT_VISION_MODEL", "kimi-k2.6")
+MOONSHOT_TEXT_MODEL = os.getenv("MOONSHOT_TEXT_MODEL", "kimi-k2.6")
+
+# π 助手 LLM（Agnes OpenAI 兼容 API，与批改分离）
 AGNES_API_BASE = os.getenv("AGNES_API_BASE", "https://apihub.agnes-ai.com/v1").rstrip("/")
 AGNES_ASSISTANT_MODEL = os.getenv("AGNES_ASSISTANT_MODEL", "agnes-2.0-flash")
 AGNES_API_KEY = os.getenv("AGNES_API_KEY", "").strip()

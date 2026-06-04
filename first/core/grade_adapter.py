@@ -69,7 +69,7 @@ def math_process(
         return {
             "error": True,
             "score": "—",
-            "comments": "批改失败，请检查图片清晰度、网络或 API 配置后重试。",
+            "comments": "批改失败，请检查图片清晰度、网络或 .env 中 MOONSHOT_API_KEY（Kimi）配置后重试。",
             "weak_points": [],
             "questions": [],
             "details": [],

@@ -15,7 +15,7 @@
 ```powershell
 cd D:\my_code\xiwopai\first
 copy .env.example .env
-# 编辑 .env 填入 DASHSCOPE_API_KEY、SECRET_KEY 等
+# 编辑 .env 填入 MOONSHOT_API_KEY（Kimi 批改）、SECRET_KEY 等；见 docs/DEV.md
 
 pip install -r requirements.txt
 python app.py
